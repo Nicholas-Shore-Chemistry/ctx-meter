@@ -176,8 +176,8 @@ function runTag(agents, tag) {
 }
 
 const subOrchGrunt = {
-  so01: 'ORCH-TAG: run1-a1b2\nBrief. Spawn the grunt with:\nGRUNT-TAG: run1-a1b2-grunt\n',
-  gr01: 'GRUNT-TAG: run1-a1b2-grunt\nDo the mechanical task.\n',
+  so01: 'ORCH-RUN: demo PATHWAY: slow\nORCH-TAG: run1-a1b2\nBrief. Spawn the grunt with:\nGRUNT-TAG: run1-a1b2-grunt\n',
+  gr01: 'ORCH-RUN: demo PATHWAY: slow\nGRUNT-TAG: run1-a1b2-grunt\nDo the mechanical task.\n',
 };
 
 test('--tag sub-orch tag selects the sub-orch, not the grunt quoted in its brief', () => {
@@ -221,10 +221,30 @@ test('first message without a tag line falls back to substring match', () => {
   assert.equal(out.agent_id, 'aa01');
 });
 
-test('own tag is only the first tag line of the first message', () => {
-  const { out } = runTag({ aa01: 'ORCH-TAG: run1-first\nGRUNT-TAG: run1-second\n' }, 'run1-second');
-  // Not an own tag, so it is found only by the substring fallback.
-  assert.equal(out.agent_id, 'aa01');
+test('a later tag line in the first message is not an own tag', () => {
+  // aa01 quotes run1-second on line 3; bb02 really owns it. Exact match must find bb02 only.
+  const { status, out } = runTag(
+    {
+      aa01: 'ORCH-RUN: demo\nORCH-TAG: run1-first\nGRUNT-TAG: run1-second\n',
+      bb02: 'ORCH-RUN: demo\nGRUNT-TAG: run1-second\n',
+    },
+    'run1-second',
+  );
+  assert.equal(status, 0);
+  assert.equal(out.agent_id, 'bb02');
+});
+
+test('a mid-line tag mention is not an own tag; the tag line at line start is', () => {
+  // aa01 mentions "GRUNT-TAG: run1-other" mid-line before its real own tag; bb02 owns run1-other.
+  const { status, out } = runTag(
+    {
+      aa01: 'ORCH-RUN: demo see GRUNT-TAG: run1-other\nORCH-TAG: run1-real\n',
+      bb02: 'ORCH-RUN: demo\nORCH-TAG: run1-other\n',
+    },
+    'run1-other',
+  );
+  assert.equal(status, 0);
+  assert.equal(out.agent_id, 'bb02');
 });
 
 test('--tag matching nothing is not_found even with own tags present', () => {
