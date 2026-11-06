@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **`ctx-check.mjs --tag` matches an agent's own tag.** The own tag is the value on the first
+  `ORCH-TAG:`/`GRUNT-TAG:` line of the agent's first message; `--tag` selects agents whose own
+  tag equals the value exactly, so a sub-orchestrator and its `<tag>-grunt...` helper (or a
+  brief quoting the grunt's spawn prompt) no longer give `ambiguous_tag`. If no agent matches
+  that way it falls back to the old substring match. Identical own tags stay ambiguous.
+
 ## 0.3.4
 
 Fork release ([redacted][redacted]/claude-context).

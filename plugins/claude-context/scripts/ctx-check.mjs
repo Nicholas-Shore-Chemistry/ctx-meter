@@ -1,7 +1,7 @@
 // scripts/ctx-check.mjs
 // One agent's OWN live context, read from its transcript. A sub-agent shares its parent's
 // session id, so report.mjs would return the controller's number; this addresses the
-// sub-agent's transcript instead (by agent id, or by a tag the parent put in its prompt).
+// sub-agent's transcript instead (by agent id, or by a tag the parent put in its prompt: exact own-tag match, else substring).
 // Facts only: no thresholds, no advice.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -105,9 +105,12 @@ export function ctxCheck({ sessionId, agentId = null, tag = null, configDir }) {
     } catch {
       /* no subagents dir */
     }
-    const hits = files.filter((f) =>
-      firstUserText(readJsonl(path.join(found.subDir, f))).includes(tag),
-    );
+    const texts = files.map((f) => [f, firstUserText(readJsonl(path.join(found.subDir, f)))]);
+    // An agent's own tag is the first ORCH-TAG/GRUNT-TAG line of its first message; quoted
+    // later tag lines (e.g. a grunt spawn prompt in a brief) do not count. Exact match first,
+    // substring of the whole first message only if nothing matches exactly.
+    const own = texts.filter(([, t]) => t.match(/^(?:ORCH-TAG|GRUNT-TAG):\s*(\S+)/m)?.[1] === tag);
+    const hits = (own.length ? own : texts.filter(([, t]) => t.includes(tag))).map(([f]) => f);
     const ids = hits.map((f) => f.slice('agent-'.length, -'.jsonl'.length));
     if (ids.length === 0)
       throw new CheckError(

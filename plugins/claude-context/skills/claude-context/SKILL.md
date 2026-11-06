@@ -127,9 +127,11 @@ returns the parent's context. To read one agent's own context from its transcrip
 - `--session-id` defaults to `CLAUDE_CODE_SESSION_ID`. With neither `--agent-id` nor
   `--tag` it reads the main session transcript.
 - `--agent-id <id>` reads `subagents/agent-<id>.jsonl` of that session.
-- `--tag <text>` finds the one sub-agent whose first message contains that literal text,
-  for example a unique `ORCH-TAG: ...` line its parent put in its prompt (a sub-agent does
-  not know its own agent id). Zero or several matches are errors.
+- `--tag <text>` finds the one sub-agent whose own tag equals that text: the value on the
+  first `ORCH-TAG:` or `GRUNT-TAG:` line of its first message (a sub-agent does not know its
+  own agent id; tag lines quoted later in a brief do not count). Only if no agent matches
+  that way does it fall back to a literal substring match on the first message. Zero or
+  several matches are errors.
 
 Output is one JSON line: `context_tokens` (the last assistant message's
 `input_tokens + cache_read_input_tokens + cache_creation_input_tokens`), `context_k`

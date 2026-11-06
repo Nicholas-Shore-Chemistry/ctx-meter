@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -143,4 +144,91 @@ test('output contains no advice or thresholds (facts only)', () => {
     'transcript',
     'turns',
   ]);
+});
+
+// Own-tag resolution: fixtures are generated in a temp config dir (synthetic, neutral tags).
+function makeSession(agents) {
+  const cfg = fs.mkdtempSync(path.join(os.tmpdir(), 'ctx-check-tag-'));
+  const sub = path.join(cfg, 'projects/p/sess-tag/subagents');
+  fs.mkdirSync(sub, { recursive: true });
+  fs.writeFileSync(path.join(cfg, 'projects/p/sess-tag.jsonl'), '');
+  for (const [id, text] of Object.entries(agents)) {
+    const user = { type: 'user', message: { role: 'user', content: text } };
+    const asst = {
+      type: 'assistant',
+      message: { id: `m-${id}`, usage: { input_tokens: 1000, output_tokens: 1 } },
+    };
+    fs.writeFileSync(
+      path.join(sub, `agent-${id}.jsonl`),
+      `${JSON.stringify(user)}\n${JSON.stringify(asst)}\n`,
+    );
+  }
+  return cfg;
+}
+
+function runTag(agents, tag) {
+  const cfg = makeSession(agents);
+  try {
+    return run(['--session-id', 'sess-tag', '--tag', tag], { CLAUDE_CONFIG_DIR: cfg });
+  } finally {
+    fs.rmSync(cfg, { recursive: true, force: true });
+  }
+}
+
+const subOrchGrunt = {
+  so01: 'ORCH-TAG: run1-a1b2\nBrief. Spawn the grunt with:\nGRUNT-TAG: run1-a1b2-grunt\n',
+  gr01: 'GRUNT-TAG: run1-a1b2-grunt\nDo the mechanical task.\n',
+};
+
+test('--tag sub-orch tag selects the sub-orch, not the grunt quoted in its brief', () => {
+  const { status, out } = runTag(subOrchGrunt, 'run1-a1b2');
+  assert.equal(status, 0);
+  assert.equal(out.agent_id, 'so01');
+});
+
+test('--tag grunt tag selects the grunt, not the sub-orch whose brief quotes it', () => {
+  const { status, out } = runTag(subOrchGrunt, 'run1-a1b2-grunt');
+  assert.equal(status, 0);
+  assert.equal(out.agent_id, 'gr01');
+});
+
+test('--tag is an exact match on the own tag: a prefix of it falls back to substring', () => {
+  // 'run1-a1' is no own tag, so the substring fallback runs and sees both first messages.
+  const { status, out } = runTag(subOrchGrunt, 'run1-a1');
+  assert.equal(status, 2);
+  assert.equal(out.error, 'ambiguous_tag');
+  // An exact own tag never reaches the fallback, even though it is a prefix of another.
+  assert.equal(runTag(subOrchGrunt, 'run1-a1b2').out.agent_id, 'so01');
+});
+
+test('two agents with the same own tag are ambiguous', () => {
+  const { status, out } = runTag(
+    { aa01: 'ORCH-TAG: run1-dup\nx', bb02: 'GRUNT-TAG: run1-dup\ny' },
+    'run1-dup',
+  );
+  assert.equal(status, 2);
+  assert.equal(out.error, 'ambiguous_tag');
+  assert.match(out.detail, /aa01/);
+  assert.match(out.detail, /bb02/);
+});
+
+test('first message without a tag line falls back to substring match', () => {
+  const { status, out } = runTag(
+    { aa01: 'Please work on marker run1-zz9 today.', bb02: 'ORCH-TAG: run1-other\n' },
+    'run1-zz9',
+  );
+  assert.equal(status, 0);
+  assert.equal(out.agent_id, 'aa01');
+});
+
+test('own tag is only the first tag line of the first message', () => {
+  const { out } = runTag({ aa01: 'ORCH-TAG: run1-first\nGRUNT-TAG: run1-second\n' }, 'run1-second');
+  // Not an own tag, so it is found only by the substring fallback.
+  assert.equal(out.agent_id, 'aa01');
+});
+
+test('--tag matching nothing is not_found even with own tags present', () => {
+  const { status, out } = runTag(subOrchGrunt, 'run9-none');
+  assert.equal(status, 2);
+  assert.equal(out.error, 'not_found');
 });
