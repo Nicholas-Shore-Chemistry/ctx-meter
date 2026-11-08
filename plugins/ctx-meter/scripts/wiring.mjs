@@ -46,11 +46,39 @@ function currentCommand(settings) {
   const c = settings?.statusLine?.command;
   return typeof c === 'string' && c.trim() !== '' ? c : null;
 }
-// A `statusLine` present but without a usable string command is classified FOREIGN, not
-// empty: the user configured something there, so we co-exist (preserving it in a sidecar)
-// rather than silently overwriting it with our own collector.
-function classify(command, hasStatusLine) {
-  if (command == null) return hasStatusLine ? 'foreign' : 'empty';
+// Every key of a statusLine object except `type` and `command` (refreshInterval, padding...).
+function extras(statusLine) {
+  if (statusLine == null || typeof statusLine !== 'object' || Array.isArray(statusLine)) return {};
+  const rest = { ...statusLine };
+  delete rest.type;
+  delete rest.command;
+  return rest;
+}
+const isPlainObject = (v) => v != null && typeof v === 'object' && !Array.isArray(v);
+// Teardown: write `settings` with the stored original statusLine back. A plain-object original
+// gets the extras added since the wrap merged in (they win); any other stored value (string,
+// array, number, boolean, null) is restored exactly as stored. A merged object with no usable
+// `command` would be schema-invalid, so statusLine is removed instead.
+function withRestoredStatusLine(base, original) {
+  const next = { ...base };
+  if (!isPlainObject(original)) {
+    next.statusLine = original;
+    return next;
+  }
+  const merged = { ...original, ...extras(base.statusLine) };
+  if (typeof merged.command === 'string' && merged.command.trim() !== '') next.statusLine = merged;
+  else delete next.statusLine;
+  return next;
+}
+// A `statusLine` OBJECT without a usable string command (extras only, e.g. hand-edited) is the
+// empty slot: setup wires into it and keeps its extras. A non-object `statusLine` (string,
+// array, ...) is still FOREIGN so we never overwrite something we cannot interpret.
+function classify(command, statusLine) {
+  if (command == null) {
+    if (statusLine == null) return 'empty';
+    const isObj = typeof statusLine === 'object' && !Array.isArray(statusLine);
+    return isObj ? 'empty' : 'foreign';
+  }
   if (detectLegacyMarker(command)) return 'legacy-claude-context';
   const marker = detectMarker(command);
   if (marker === 'collect') return 'ours-collect';
@@ -83,7 +111,7 @@ export function detect({ env = process.env, deps = fs } = {}) {
   const sidecar = readSidecar(env, deps);
   const storedCommand = sidecar ? sidecar.original.command : null;
   return {
-    slot: classify(command, s.statusLine != null),
+    slot: classify(command, s.statusLine),
     preview: command == null ? null : previewCommand(command),
     hasSidecar: !!sidecar,
     sidecarMatchesSlot: !!sidecar && command != null && storedCommand === command,
@@ -154,7 +182,7 @@ export function wrap({ env = process.env, deps = fs, now = Date.now(), runtime }
   if (settings === undefined && exists) return { action: 'error', reason: 'unparseable-settings' };
   const base = settings ?? {};
   const command = currentCommand(base);
-  const slot = classify(command, base.statusLine != null);
+  const slot = classify(command, base.statusLine);
   const state = { backedUp: false, now, rawOriginal: raw };
 
   // The upstream claude-context collector is still wired: wrapping it as foreign would run two
@@ -175,7 +203,7 @@ export function wrap({ env = process.env, deps = fs, now = Date.now(), runtime }
     backupOnce(env, deps, state);
     writeSettingsAtomic(env, deps, {
       ...base,
-      statusLine: { type: 'command', command },
+      statusLine: { ...extras(base.statusLine), type: 'command', command },
     });
   };
 
@@ -218,7 +246,7 @@ export function wrap({ env = process.env, deps = fs, now = Date.now(), runtime }
   });
   writeSettingsAtomic(env, deps, {
     ...base,
-    statusLine: { type: 'command', command: wrapperCommand },
+    statusLine: { ...extras(base.statusLine), type: 'command', command: wrapperCommand },
   });
   return { action: 'wired-coexist', slot };
 }
@@ -250,7 +278,7 @@ export function teardown({ env = process.env, deps = fs } = {}) {
   if (marker === 'coexist') {
     if (sidecar) {
       backupOnce(env, deps, state);
-      writeSettingsAtomic(env, deps, { ...base, statusLine: sidecar.original });
+      writeSettingsAtomic(env, deps, withRestoredStatusLine(base, sidecar.original));
       clearArtifacts();
       return { action: 'restored-original' };
     }
@@ -261,7 +289,7 @@ export function teardown({ env = process.env, deps = fs } = {}) {
     const backup = readJson(backupPath(env), deps);
     if (backup && 'statusLine' in backup) {
       backupOnce(env, deps, state);
-      writeSettingsAtomic(env, deps, { ...base, statusLine: backup.statusLine });
+      writeSettingsAtomic(env, deps, withRestoredStatusLine(base, backup.statusLine));
       clearArtifacts();
       return { action: 'restored-from-backup' };
     }

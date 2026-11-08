@@ -205,6 +205,8 @@ its input for the snapshot. Both run; your **displayed line is unchanged**. Beca
 original was saved verbatim, `/ctx-meter:teardown` restores that exact statusline and
 removes the sidecar. Setup **never** replaces or takes over a slot it doesn't own.
 
+Other `statusLine` settings such as `refreshInterval` are kept.
+
 Co-existence is available on **macOS, Linux, and Windows + Git Bash** in this alpha. On
 **native PowerShell/cmd** ctx-meter does not wire a statusline this release (a change
 from 0.2.0, which shipped an empty-slot PowerShell collector) — run Claude Code from **Git

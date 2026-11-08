@@ -72,10 +72,27 @@ test('detect: unparseable settings.json → error slot (never overwrite what we 
   assert.equal(detect({ env: { CLAUDE_CONFIG_DIR: cfg } }).slot, 'error');
 });
 
-test('detect: a statusLine present but with no usable command classifies foreign, not empty', () => {
+test('detect: a command-less statusLine is the empty slot', () => {
   const cfg = mkCfg();
   writeSettings(cfg, { statusLine: { type: 'command' } }); // no `command` string
-  assert.equal(detect({ env: { CLAUDE_CONFIG_DIR: cfg } }).slot, 'foreign');
+  assert.equal(detect({ env: { CLAUDE_CONFIG_DIR: cfg } }).slot, 'empty');
+  const c2 = mkCfg();
+  writeSettings(c2, { statusLine: { refreshInterval: 60 } });
+  assert.equal(detect({ env: { CLAUDE_CONFIG_DIR: c2 } }).slot, 'empty');
+});
+
+test("detect: extras don't change a slot that has a command", () => {
+  for (const [command, slot] of [
+    [COLLECT, 'ours-collect'],
+    [COEXIST, 'ours-coexist'],
+    [FOREIGN, 'foreign'],
+  ]) {
+    const cfg = mkCfg();
+    writeSettings(cfg, {
+      statusLine: { type: 'command', command, refreshInterval: 60, padding: 1 },
+    });
+    assert.equal(detect({ env: { CLAUDE_CONFIG_DIR: cfg } }).slot, slot);
+  }
 });
 
 test('detect: a bare-string settings.json → error slot (not a spreadable object)', () => {
@@ -230,14 +247,74 @@ test('wrap: tightens an existing loose sidecar dir to 0700', () => {
   assert.equal(fs.statSync(scDir).mode & 0o777, 0o700, 'sidecar dir re-tightened to 0700');
 });
 
-test('wrap: a statusLine with no usable command is co-existed (foreign), never seized', () => {
+test('wrap: empty slot with extras keeps them (command-less statusLine is the empty slot)', () => {
   const cfg = mkCfg();
-  writeSettings(cfg, { statusLine: { type: 'command', padding: 3 } }); // present, no `command`
+  writeSettings(cfg, { statusLine: { type: 'command', padding: 3, refreshInterval: 60 } });
   const r = wrap({ env: { CLAUDE_CONFIG_DIR: cfg }, now: 0, runtime: RUNTIME });
-  assert.equal(r.action, 'wired-coexist', 'foreign path — original preserved, slot not seized');
-  // The whole original object is stored verbatim so teardown restores it.
-  assert.deepEqual(readSidecarFile(cfg).original, { type: 'command', padding: 3 });
-  assert.equal(detectMarker(readSettingsFile(cfg).statusLine.command), 'coexist');
+  assert.equal(r.action, 'wired-collect');
+  const sl = readSettingsFile(cfg).statusLine;
+  assert.equal(detectMarker(sl.command), 'collect');
+  assert.equal(sl.type, 'command');
+  assert.equal(sl.padding, 3);
+  assert.equal(sl.refreshInterval, 60);
+  assert.equal(fs.existsSync(path.join(cfg, 'ctx-meter', 'coexist.json')), false);
+});
+
+test('wrap: collect refresh keeps refreshInterval and padding', () => {
+  const cfg = mkCfg();
+  writeSettings(cfg, {
+    statusLine: { type: 'command', command: COLLECT, refreshInterval: 60, padding: 2 },
+  });
+  const r = wrap({ env: { CLAUDE_CONFIG_DIR: cfg }, now: 0, runtime: RUNTIME });
+  assert.equal(r.action, 'refreshed-collect');
+  const sl = readSettingsFile(cfg).statusLine;
+  assert.equal(sl.refreshInterval, 60);
+  assert.equal(sl.padding, 2);
+  assert.equal(detectMarker(sl.command), 'collect');
+});
+
+test('wrap: coexist refresh keeps refreshInterval', () => {
+  const cfg = mkCfg();
+  writeSettings(cfg, {
+    statusLine: { type: 'command', command: COEXIST, refreshInterval: 60 },
+  });
+  const r = wrap({ env: { CLAUDE_CONFIG_DIR: cfg }, now: 0, runtime: RUNTIME });
+  assert.equal(r.action, 'refreshed-coexist');
+  const sl = readSettingsFile(cfg).statusLine;
+  assert.equal(sl.refreshInterval, 60);
+  assert.equal(detectMarker(sl.command), 'coexist');
+});
+
+test("wrap: foreign wrap keeps the original's extras on the wrapper and stores the original whole", () => {
+  const cfg = mkCfg();
+  const ORIG = { type: 'command', command: FOREIGN, refreshInterval: 30, padding: 1 };
+  writeSettings(cfg, { statusLine: ORIG });
+  const r = wrap({ env: { CLAUDE_CONFIG_DIR: cfg }, now: 0, runtime: RUNTIME });
+  assert.equal(r.action, 'wired-coexist');
+  const sl = readSettingsFile(cfg).statusLine;
+  assert.equal(detectMarker(sl.command), 'coexist');
+  assert.equal(sl.refreshInterval, 30);
+  assert.equal(sl.padding, 1);
+  assert.deepEqual(readSidecarFile(cfg).original, ORIG);
+});
+
+test('wrap: an extra key named command or type never overrides ours', () => {
+  const cfg = mkCfg();
+  writeSettings(cfg, {
+    statusLine: { type: 'command', command: COLLECT, refreshInterval: 5 },
+  });
+  wrap({ env: { CLAUDE_CONFIG_DIR: cfg }, now: 0, runtime: RUNTIME });
+  const sl = readSettingsFile(cfg).statusLine;
+  assert.equal(sl.type, 'command');
+  assert.equal(detectMarker(sl.command), 'collect');
+  // Command-less slot whose stray type is not 'command': ours still wins.
+  const c2 = mkCfg();
+  writeSettings(c2, { statusLine: { type: 'text', padding: 1 } });
+  wrap({ env: { CLAUDE_CONFIG_DIR: c2 }, now: 0, runtime: RUNTIME });
+  const s2 = readSettingsFile(c2).statusLine;
+  assert.equal(s2.type, 'command');
+  assert.equal(detectMarker(s2.command), 'collect');
+  assert.equal(s2.padding, 1);
 });
 
 test('wrap: a bare-string settings.json is unparseable, never spread into an object', () => {
@@ -327,28 +404,113 @@ test('teardown: coexist + sidecar → restores the original verbatim, removes si
   assert.equal(fs.existsSync(path.join(cfg, 'settings.json.ctx-meter.bak')), false);
 });
 
-test('teardown: restores a command-less co-existed original verbatim (round-trips wrap), clears sidecar', () => {
-  // wrap() stores a foreign statusLine that has no usable `command` verbatim (see the
-  // "no usable command is co-existed" wrap test). teardown must restore that same object,
-  // never `delete` it, and must not orphan the sidecar.
+test('teardown: a command-less sidecar original (legacy sidecar) removes statusLine, clears sidecar', () => {
+  // Older versions stored a command-less foreign statusLine in the sidecar. A command-less
+  // statusLine is schema-invalid, so teardown removes it; the sidecar must not be orphaned.
   const cfg = mkCfg();
-  writeSettings(cfg, { model: 'opus', statusLine: { type: 'command', padding: 3 } });
-  const w = wrap({ env: { CLAUDE_CONFIG_DIR: cfg }, now: 0, runtime: RUNTIME });
-  assert.equal(w.action, 'wired-coexist');
+  writeSettings(cfg, { model: 'opus', statusLine: { type: 'command', command: COEXIST } });
+  writeSidecar(cfg, { type: 'command', padding: 3 });
   const r = teardown({ env: { CLAUDE_CONFIG_DIR: cfg } });
   assert.equal(r.action, 'restored-original');
   const settings = readSettingsFile(cfg);
-  assert.deepEqual(
-    settings.statusLine,
-    { type: 'command', padding: 3 },
-    'original restored verbatim',
-  );
+  assert.equal('statusLine' in settings, false, 'never write a command-less statusLine');
   assert.equal(settings.model, 'opus', 'sibling keys preserved');
   assert.equal(
     fs.existsSync(path.join(cfg, 'ctx-meter', 'coexist.json')),
     false,
     'sidecar removed, not orphaned',
   );
+});
+
+test('detect: a string statusLine is foreign', () => {
+  const cfg = mkCfg();
+  writeSettings(cfg, { statusLine: 'my-statusline.sh' });
+  assert.equal(detect({ env: { CLAUDE_CONFIG_DIR: cfg } }).slot, 'foreign');
+});
+
+test('teardown: a string or array statusLine survives wrap then teardown unchanged', () => {
+  for (const original of ['my-statusline.sh', ['a', 'b']]) {
+    const cfg = mkCfg();
+    writeSettings(cfg, { model: 'opus', statusLine: original });
+    const w = wrap({ env: { CLAUDE_CONFIG_DIR: cfg }, now: 0, runtime: RUNTIME });
+    assert.equal(w.action, 'wired-coexist');
+    const r = teardown({ env: { CLAUDE_CONFIG_DIR: cfg } });
+    assert.equal(r.action, 'restored-original');
+    const settings = readSettingsFile(cfg);
+    assert.deepEqual(settings.statusLine, original);
+    assert.equal(settings.model, 'opus');
+  }
+});
+
+test('teardown: backup fallback with a command-less original removes statusLine', () => {
+  const cfg = mkCfg();
+  writeSettings(cfg, {
+    statusLine: { type: 'command', command: COEXIST, refreshInterval: 60 },
+  });
+  fs.writeFileSync(
+    path.join(cfg, 'settings.json.ctx-meter.bak'),
+    JSON.stringify({ statusLine: { type: 'command' } }),
+  );
+  const r = teardown({ env: { CLAUDE_CONFIG_DIR: cfg } });
+  assert.equal(r.action, 'restored-from-backup');
+  assert.equal('statusLine' in readSettingsFile(cfg), false);
+});
+
+test('teardown: coexist restores the original with extras added since the wrap', () => {
+  const cfg = mkCfg();
+  writeSettings(cfg, {
+    statusLine: { type: 'command', command: COEXIST, refreshInterval: 60 },
+  });
+  writeSidecar(cfg, { type: 'command', command: FOREIGN, padding: 2, refreshInterval: 10 });
+  const r = teardown({ env: { CLAUDE_CONFIG_DIR: cfg } });
+  assert.equal(r.action, 'restored-original');
+  assert.deepEqual(readSettingsFile(cfg).statusLine, {
+    type: 'command',
+    command: FOREIGN,
+    padding: 2,
+    refreshInterval: 60,
+  });
+});
+
+test('teardown: coexist via backup fallback keeps extras added since the wrap', () => {
+  const cfg = mkCfg();
+  writeSettings(cfg, {
+    statusLine: { type: 'command', command: COEXIST, refreshInterval: 60 },
+  });
+  fs.writeFileSync(
+    path.join(cfg, 'settings.json.ctx-meter.bak'),
+    JSON.stringify({ statusLine: { type: 'command', command: FOREIGN } }),
+  );
+  const r = teardown({ env: { CLAUDE_CONFIG_DIR: cfg } });
+  assert.equal(r.action, 'restored-from-backup');
+  assert.deepEqual(readSettingsFile(cfg).statusLine, {
+    type: 'command',
+    command: FOREIGN,
+    refreshInterval: 60,
+  });
+});
+
+test('teardown: collect still removes statusLine even with refreshInterval set', () => {
+  const cfg = mkCfg();
+  writeSettings(cfg, {
+    model: 'opus',
+    statusLine: { type: 'command', command: COLLECT, refreshInterval: 60 },
+  });
+  const r = teardown({ env: { CLAUDE_CONFIG_DIR: cfg } });
+  assert.equal(r.action, 'removed-collect');
+  const settings = readSettingsFile(cfg);
+  assert.equal('statusLine' in settings, false);
+  assert.equal(settings.model, 'opus');
+});
+
+test('teardown: coexist-no-sidecar removes statusLine', () => {
+  const cfg = mkCfg();
+  writeSettings(cfg, {
+    statusLine: { type: 'command', command: COEXIST, refreshInterval: 60 },
+  });
+  const r = teardown({ env: { CLAUDE_CONFIG_DIR: cfg } });
+  assert.equal(r.action, 'coexist-no-sidecar-removed');
+  assert.equal('statusLine' in readSettingsFile(cfg), false);
 });
 
 test('teardown: coexist marker but a truly unusable sidecar → removes statusLine AND clears the orphan sidecar', () => {
