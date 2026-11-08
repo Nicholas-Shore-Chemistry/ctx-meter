@@ -158,7 +158,7 @@ export function resolveReport({
   };
 }
 
-const COLD_START_HUMAN = `Claude Context — collector not configured
+const COLD_START_HUMAN = `ctx-meter — collector not configured
 
 No resource facts are available for this session yet: the usage collector
 has not recorded a snapshot, so there is nothing to measure.
@@ -166,7 +166,7 @@ has not recorded a snapshot, so there is nothing to measure.
 To enable reporting — context %, 5-hour / 7-day usage, session cost, and
 compaction count — run:
 
-    /claude-context:setup
+    /ctx-meter:setup
 
 That wires a statusline helper which captures the figures Claude Code sends
 only to the statusline. Once it has run, this report returns live numbers.`;
@@ -297,7 +297,7 @@ function rlLine(label, r, w, now) {
     case 'unavailable_stale':
       return `${label}: unavailable — last collector reading ${r.snapshotAgeSeconds}s ago (idle; send a message to refresh)`;
     default:
-      return `${label}: unavailable — enable the collector with /claude-context:setup`;
+      return `${label}: unavailable — enable the collector with /ctx-meter:setup`;
   }
 }
 
@@ -326,7 +326,7 @@ function sourceLine(r) {
 
 function buildHuman(r, now) {
   if (r.setupRequired) return COLD_START_HUMAN;
-  const lines = [`Claude Context — ${modelName(r.model)}`];
+  const lines = [`ctx-meter — ${modelName(r.model)}`];
   const c = r.context;
   if (c && c.used_percentage == null) {
     lines.push('Context: unavailable — window size not reported yet');

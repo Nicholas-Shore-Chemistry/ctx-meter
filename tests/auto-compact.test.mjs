@@ -16,7 +16,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { readAutoCompactWindow } from '../plugins/claude-context/scripts/lib/auto-compact.mjs';
+import { readAutoCompactWindow } from '../plugins/ctx-meter/scripts/lib/auto-compact.mjs';
 
 const CFG = path.join('/cfg');
 const env = { CLAUDE_CONFIG_DIR: CFG };

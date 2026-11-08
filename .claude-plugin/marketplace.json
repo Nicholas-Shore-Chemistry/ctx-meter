@@ -1,13 +1,13 @@
 {
-  "name": "claude-context",
-  "owner": { "name": "Ovid" },
-  "description": "Your agents can't manage a budget they can't see — claude-context reports their own context, 5h/7d usage, and cost on demand. Facts only; your rules set the policy.",
+  "name": "ctx-meter",
+  "owner": { "name": "Ovid, Nicholas Shore" },
+  "description": "Your agents can't manage a budget they can't see — ctx-meter reports their own context, 5h/7d usage, and cost on demand. Facts only; your rules set the policy.",
   "version": "0.3.4",
   "plugins": [
     {
-      "name": "claude-context",
-      "source": "./plugins/claude-context",
-      "description": "Your agents can't manage a budget they can't see — claude-context reports their own context, 5h/7d usage, and cost on demand. Facts only; your rules set the policy.",
+      "name": "ctx-meter",
+      "source": "./plugins/ctx-meter",
+      "description": "Your agents can't manage a budget they can't see — ctx-meter reports their own context, 5h/7d usage, and cost on demand. Facts only; your rules set the policy.",
       "category": "monitoring",
       "tags": ["context", "usage", "rate-limits", "statusline", "telemetry"]
     }

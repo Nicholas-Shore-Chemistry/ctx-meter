@@ -6,7 +6,7 @@ import {
   headroom,
   effectiveWindow,
   formatTokens,
-} from '../plugins/claude-context/scripts/lib/token-math.mjs';
+} from '../plugins/ctx-meter/scripts/lib/token-math.mjs';
 
 test('usedTokens sums input + cache read + cache creation', () => {
   assert.equal(

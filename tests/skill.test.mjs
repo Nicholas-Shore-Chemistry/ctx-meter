@@ -7,7 +7,7 @@ import path from 'node:path';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const skill = readFileSync(
-  path.join(root, 'plugins', 'claude-context', 'skills', 'claude-context', 'SKILL.md'),
+  path.join(root, 'plugins', 'ctx-meter', 'skills', 'ctx-meter', 'SKILL.md'),
   'utf8',
 );
 
@@ -22,7 +22,7 @@ test("skill first-use defers to setup's confirm", () => {
 });
 
 test('frontmatter declares name and description', () => {
-  assert.match(skill, /^---\n[\s\S]*\nname:\s*claude-context\b/m);
+  assert.match(skill, /^---\n[\s\S]*\nname:\s*ctx-meter\b/m);
   assert.match(skill, /^description:\s*.+/m);
 });
 
@@ -48,4 +48,10 @@ test('documents whose numbers these are (session context vs account usage)', () 
 test('documents ctx-check for sub-agents', () => {
   assert.match(skill, /## Sub-agents: ctx-check/);
   assert.match(skill, /scripts\/ctx-check\.mjs/);
+});
+
+test('description is at most 350 characters and names context, 5h, 7d, cost', () => {
+  const d = skill.match(/^description:\s*(.+)$/m)[1].trim();
+  assert.ok(d.length <= 350, `description is ${d.length} chars`);
+  for (const w of [/context/i, /5h/, /7d/, /cost/i]) assert.match(d, w);
 });

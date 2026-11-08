@@ -6,11 +6,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { detect, wrap, teardown } from '../plugins/claude-context/scripts/wiring.mjs';
-import { detectMarker } from '../plugins/claude-context/scripts/lib/marker.mjs';
+import { detect, wrap, teardown } from '../plugins/ctx-meter/scripts/wiring.mjs';
+import { detectMarker } from '../plugins/ctx-meter/scripts/lib/marker.mjs';
 
 const wiringPath = fileURLToPath(
-  new URL('../plugins/claude-context/scripts/wiring.mjs', import.meta.url),
+  new URL('../plugins/ctx-meter/scripts/wiring.mjs', import.meta.url),
 );
 
 function mkCfg() {
@@ -20,14 +20,14 @@ function writeSettings(cfg, obj) {
   fs.writeFileSync(path.join(cfg, 'settings.json'), JSON.stringify(obj, null, 2));
 }
 function writeSidecar(cfg, original) {
-  fs.mkdirSync(path.join(cfg, 'claude-context'), { recursive: true });
+  fs.mkdirSync(path.join(cfg, 'ctx-meter'), { recursive: true });
   fs.writeFileSync(
-    path.join(cfg, 'claude-context', 'coexist.json'),
+    path.join(cfg, 'ctx-meter', 'coexist.json'),
     JSON.stringify({ original, wrapped_at: new Date(0).toISOString() }),
   );
 }
-const COLLECT = "bash -c 'export CLAUDE_CONTEXT_WRAPPER=collect; exec node x/scripts/collect.mjs'";
-const COEXIST = "bash -c 'export CLAUDE_CONTEXT_WRAPPER=coexist; exec node x/scripts/coexist.mjs'";
+const COLLECT = "bash -c 'export CTX_METER_WRAPPER=collect; exec node x/scripts/collect.mjs'";
+const COEXIST = "bash -c 'export CTX_METER_WRAPPER=coexist; exec node x/scripts/coexist.mjs'";
 const FOREIGN = 'bun run ~/.claude/claude-hud/statusline.js';
 
 test('detect: empty slot (no settings file)', () => {
@@ -89,7 +89,7 @@ function readSettingsFile(cfg) {
   return JSON.parse(fs.readFileSync(path.join(cfg, 'settings.json'), 'utf8'));
 }
 function readSidecarFile(cfg) {
-  return JSON.parse(fs.readFileSync(path.join(cfg, 'claude-context', 'coexist.json'), 'utf8'));
+  return JSON.parse(fs.readFileSync(path.join(cfg, 'ctx-meter', 'coexist.json'), 'utf8'));
 }
 
 test('wrap: empty slot → wires collect, marked, no sidecar', () => {
@@ -97,7 +97,7 @@ test('wrap: empty slot → wires collect, marked, no sidecar', () => {
   const r = wrap({ env: { CLAUDE_CONFIG_DIR: cfg }, now: 0, runtime: RUNTIME });
   assert.equal(r.action, 'wired-collect');
   assert.equal(detectMarker(readSettingsFile(cfg).statusLine.command), 'collect');
-  assert.equal(fs.existsSync(path.join(cfg, 'claude-context', 'coexist.json')), false);
+  assert.equal(fs.existsSync(path.join(cfg, 'ctx-meter', 'coexist.json')), false);
 });
 
 test('wrap: foreign → stores the WHOLE original statusLine object + wires coexist, preserving other keys', () => {
@@ -122,7 +122,7 @@ test('wrap: writes exactly ONE full-file backup, mode 0600, before mutating', ()
   const cfg = mkCfg();
   writeSettings(cfg, { statusLine: { type: 'command', command: FOREIGN } });
   wrap({ env: { CLAUDE_CONFIG_DIR: cfg }, now: 0, runtime: RUNTIME });
-  const bak = path.join(cfg, 'settings.json.claude-context.bak');
+  const bak = path.join(cfg, 'settings.json.ctx-meter.bak');
   assert.ok(fs.existsSync(bak), 'backup exists');
   assert.match(
     JSON.parse(fs.readFileSync(bak, 'utf8')).statusLine.command,
@@ -140,7 +140,7 @@ test('wrap: a second /setup does not clobber the stable backup with our own wrap
   wrap({ env: { CLAUDE_CONFIG_DIR: cfg }, now: 0, runtime: RUNTIME }); // wired-coexist, backup = FOREIGN
   wrap({ env: { CLAUDE_CONFIG_DIR: cfg }, now: 1, runtime: RUNTIME }); // refreshed-coexist
   const bak = JSON.parse(
-    fs.readFileSync(path.join(cfg, 'settings.json.claude-context.bak'), 'utf8'),
+    fs.readFileSync(path.join(cfg, 'settings.json.ctx-meter.bak'), 'utf8'),
   );
   assert.equal(bak.statusLine.command, FOREIGN, 'backup still holds the original, not the wrapper');
 });
@@ -165,8 +165,8 @@ test('wrap: a failing writeFileSync leaves no .tmp file behind (S3)', () => {
   const leftovers = fs
     .readdirSync(cfg)
     .concat(
-      fs.existsSync(path.join(cfg, 'claude-context'))
-        ? fs.readdirSync(path.join(cfg, 'claude-context'))
+      fs.existsSync(path.join(cfg, 'ctx-meter'))
+        ? fs.readdirSync(path.join(cfg, 'ctx-meter'))
         : [],
     )
     .filter((f) => f.includes('.tmp'));
@@ -180,12 +180,12 @@ test('wrap: foreign slot + missing runtime → throws BEFORE writing any sidecar
   // so a bad-runtime foreign wrap leaves no stray sidecar/backup to wedge a later run.
   assert.throws(() => wrap({ env: { CLAUDE_CONFIG_DIR: cfg }, now: 0 }));
   assert.equal(
-    fs.existsSync(path.join(cfg, 'claude-context', 'coexist.json')),
+    fs.existsSync(path.join(cfg, 'ctx-meter', 'coexist.json')),
     false,
     'no stray sidecar',
   );
   assert.equal(
-    fs.existsSync(path.join(cfg, 'settings.json.claude-context.bak')),
+    fs.existsSync(path.join(cfg, 'settings.json.ctx-meter.bak')),
     false,
     'no stray backup',
   );
@@ -223,7 +223,7 @@ test('wrap: tightens an existing loose sidecar dir to 0700', () => {
   if (process.platform === 'win32') return;
   const cfg = mkCfg();
   writeSettings(cfg, { statusLine: { type: 'command', command: FOREIGN } });
-  const scDir = path.join(cfg, 'claude-context');
+  const scDir = path.join(cfg, 'ctx-meter');
   fs.mkdirSync(scDir, { recursive: true });
   fs.chmodSync(scDir, 0o755); // simulate a loose dir left by an older version / umask
   wrap({ env: { CLAUDE_CONFIG_DIR: cfg }, now: 0, runtime: RUNTIME });
@@ -275,7 +275,7 @@ test('wrap: backs up the settings read at start, not a concurrent re-read', () =
   };
   wrap({ env: { CLAUDE_CONFIG_DIR: cfg }, now: 0, runtime: RUNTIME, deps });
   const bak = JSON.parse(
-    fs.readFileSync(path.join(cfg, 'settings.json.claude-context.bak'), 'utf8'),
+    fs.readFileSync(path.join(cfg, 'settings.json.ctx-meter.bak'), 'utf8'),
   );
   assert.equal(bak.statusLine.command, FOREIGN, 'backup holds the original, not a re-read wrapper');
 });
@@ -287,7 +287,7 @@ test('wrap: idempotent for already-ours via marker, never nests', () => {
   assert.equal(r.action, 'refreshed-coexist');
   const cmd = readSettingsFile(cfg).statusLine.command;
   assert.equal(detectMarker(cmd), 'coexist');
-  assert.equal((cmd.match(/CLAUDE_CONTEXT_WRAPPER=coexist/g) || []).length, 1, 'no nested re-wrap');
+  assert.equal((cmd.match(/CTX_METER_WRAPPER=coexist/g) || []).length, 1, 'no nested re-wrap');
 });
 
 test('wrap: orphaned sidecar — slot matches stored original → resume', () => {
@@ -307,7 +307,7 @@ test('wrap: orphaned sidecar — slot DIFFERS → conflict, no overwrite of the 
   assert.equal(r.action, 'conflict');
   assert.match(r.storedOriginalPreview, /claude-hud|statusline\.js|bun run/);
   // The orphan sidecar path is surfaced so the user has a recovery path out of the wedge.
-  assert.equal(r.sidecarPath, path.join(cfg, 'claude-context', 'coexist.json'));
+  assert.equal(r.sidecarPath, path.join(cfg, 'ctx-meter', 'coexist.json'));
   // The slot and the sidecar are both untouched.
   assert.equal(readSettingsFile(cfg).statusLine.command, 'some-third-tool');
   assert.equal(readSidecarFile(cfg).original.command, FOREIGN);
@@ -317,14 +317,14 @@ test('teardown: coexist + sidecar → restores the original verbatim, removes si
   const cfg = mkCfg();
   writeSettings(cfg, { model: 'opus', statusLine: { type: 'command', command: COEXIST } });
   writeSidecar(cfg, { type: 'command', command: FOREIGN, padding: 2 });
-  fs.writeFileSync(path.join(cfg, 'settings.json.claude-context.bak'), '{}');
+  fs.writeFileSync(path.join(cfg, 'settings.json.ctx-meter.bak'), '{}');
   const r = teardown({ env: { CLAUDE_CONFIG_DIR: cfg } });
   assert.equal(r.action, 'restored-original');
   const settings = readSettingsFile(cfg);
   assert.deepEqual(settings.statusLine, { type: 'command', command: FOREIGN, padding: 2 });
   assert.equal(settings.model, 'opus', 'other keys preserved');
-  assert.equal(fs.existsSync(path.join(cfg, 'claude-context', 'coexist.json')), false);
-  assert.equal(fs.existsSync(path.join(cfg, 'settings.json.claude-context.bak')), false);
+  assert.equal(fs.existsSync(path.join(cfg, 'ctx-meter', 'coexist.json')), false);
+  assert.equal(fs.existsSync(path.join(cfg, 'settings.json.ctx-meter.bak')), false);
 });
 
 test('teardown: restores a command-less co-existed original verbatim (round-trips wrap), clears sidecar', () => {
@@ -345,7 +345,7 @@ test('teardown: restores a command-less co-existed original verbatim (round-trip
   );
   assert.equal(settings.model, 'opus', 'sibling keys preserved');
   assert.equal(
-    fs.existsSync(path.join(cfg, 'claude-context', 'coexist.json')),
+    fs.existsSync(path.join(cfg, 'ctx-meter', 'coexist.json')),
     false,
     'sidecar removed, not orphaned',
   );
@@ -356,16 +356,16 @@ test('teardown: coexist marker but a truly unusable sidecar → removes statusLi
   // fall back to removing our wrapper — and clean up the sidecar so it is never orphaned.
   const cfg = mkCfg();
   writeSettings(cfg, { statusLine: { type: 'command', command: COEXIST } });
-  fs.mkdirSync(path.join(cfg, 'claude-context'), { recursive: true });
+  fs.mkdirSync(path.join(cfg, 'ctx-meter'), { recursive: true });
   fs.writeFileSync(
-    path.join(cfg, 'claude-context', 'coexist.json'),
+    path.join(cfg, 'ctx-meter', 'coexist.json'),
     JSON.stringify({ wrapped_at: new Date(0).toISOString() }), // no `original`
   );
   const r = teardown({ env: { CLAUDE_CONFIG_DIR: cfg } });
   assert.equal(r.action, 'coexist-no-sidecar-removed');
   assert.equal('statusLine' in readSettingsFile(cfg), false);
   assert.equal(
-    fs.existsSync(path.join(cfg, 'claude-context', 'coexist.json')),
+    fs.existsSync(path.join(cfg, 'ctx-meter', 'coexist.json')),
     false,
     'orphan sidecar cleared',
   );
@@ -387,7 +387,7 @@ test('teardown: NEVER clobbers a slot we do not own', () => {
   assert.equal(r.action, 'not-ours');
   assert.match(r.storedOriginalPreview, /claude-hud|statusline\.js|bun run/);
   // Surface the orphan sidecar path so the user knows where the preserved pointer lives.
-  assert.equal(r.sidecarPath, path.join(cfg, 'claude-context', 'coexist.json'));
+  assert.equal(r.sidecarPath, path.join(cfg, 'ctx-meter', 'coexist.json'));
   assert.equal(readSettingsFile(cfg).statusLine.command, 'third-party-tool', 'slot untouched');
 });
 
@@ -411,7 +411,7 @@ test('teardown: coexist marker, sidecar lost, backup holds the original → rest
   // The 0600 backup is a verbatim copy of the pre-setup settings.json, so it still holds the
   // user's original statusLine even after the sidecar is lost. It must NOT be deleted blindly.
   fs.writeFileSync(
-    path.join(cfg, 'settings.json.claude-context.bak'),
+    path.join(cfg, 'settings.json.ctx-meter.bak'),
     JSON.stringify({ model: 'opus', statusLine: ORIGINAL }),
   );
   const r = teardown({ env: { CLAUDE_CONFIG_DIR: cfg } });
@@ -420,7 +420,7 @@ test('teardown: coexist marker, sidecar lost, backup holds the original → rest
   assert.deepEqual(settings.statusLine, ORIGINAL, 'original statusLine recovered from the backup');
   assert.equal(settings.model, 'opus', 'sibling keys survive');
   assert.equal(
-    fs.existsSync(path.join(cfg, 'settings.json.claude-context.bak')),
+    fs.existsSync(path.join(cfg, 'settings.json.ctx-meter.bak')),
     false,
     'backup consumed',
   );
@@ -430,13 +430,13 @@ test('teardown: coexist marker, sidecar lost AND backup has no original → remo
   const cfg = mkCfg();
   writeSettings(cfg, { model: 'opus', statusLine: { type: 'command', command: COEXIST } });
   // A backup with no statusLine holds nothing to restore, so dropping it is correct.
-  fs.writeFileSync(path.join(cfg, 'settings.json.claude-context.bak'), '{}');
+  fs.writeFileSync(path.join(cfg, 'settings.json.ctx-meter.bak'), '{}');
   const r = teardown({ env: { CLAUDE_CONFIG_DIR: cfg } });
   assert.equal(r.action, 'coexist-no-sidecar-removed');
   const settings = readSettingsFile(cfg);
   assert.equal('statusLine' in settings, false, 'our wrapper is removed, not written back');
   assert.equal(settings.model, 'opus', 'sibling keys survive');
-  assert.equal(fs.existsSync(path.join(cfg, 'settings.json.claude-context.bak')), false);
+  assert.equal(fs.existsSync(path.join(cfg, 'settings.json.ctx-meter.bak')), false);
 });
 
 test('teardown: unparseable settings.json → error, file left untouched', () => {
@@ -460,4 +460,28 @@ test('CLI: wrap with a missing --runtime prints a clean JSON error, not a stack 
   assert.equal(r.stderr.trim(), '', 'no stderr output at all');
   assert.doesNotMatch(r.stderr, /\bat\s+.*wiring\.mjs/, 'no stack trace');
   assert.equal(fs.existsSync(path.join(cfg, 'settings.json')), false, 'nothing written');
+});
+
+const LEGACY = "bash -c 'export CLAUDE_CONTEXT_WRAPPER=collect; exec node x/scripts/collect.mjs'";
+
+test('setup refuses while the claude-context marker is present', () => {
+  const cfg = mkCfg();
+  writeSettings(cfg, { statusLine: { type: 'command', command: LEGACY } });
+  const before = fs.readFileSync(path.join(cfg, 'settings.json'), 'utf8');
+  const env = { CLAUDE_CONFIG_DIR: cfg };
+  assert.equal(detect({ env }).slot, 'legacy-claude-context');
+  const r = wrap({ env, runtime: process.execPath });
+  assert.equal(r.action, 'refused-legacy');
+  assert.match(r.message, /\/claude-context:teardown/);
+  assert.equal(fs.readFileSync(path.join(cfg, 'settings.json'), 'utf8'), before);
+  assert.deepEqual(fs.readdirSync(cfg).sort(), ['settings.json']); // no backup, no sidecar
+});
+
+test('teardown ignores the legacy claude-context marker', () => {
+  const cfg = mkCfg();
+  writeSettings(cfg, { statusLine: { type: 'command', command: LEGACY } });
+  const before = fs.readFileSync(path.join(cfg, 'settings.json'), 'utf8');
+  const r = teardown({ env: { CLAUDE_CONFIG_DIR: cfg } });
+  assert.equal(r.action, 'not-ours');
+  assert.equal(fs.readFileSync(path.join(cfg, 'settings.json'), 'utf8'), before);
 });

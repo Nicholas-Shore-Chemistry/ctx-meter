@@ -10,7 +10,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const script = path.join(root, 'plugins/claude-context/scripts/ctx-check.mjs');
+const script = path.join(root, 'plugins/ctx-meter/scripts/ctx-check.mjs');
 const configDir = path.join(root, 'tests/fixtures/ctx-check/config');
 
 function run(args, env = {}) {
@@ -139,6 +139,7 @@ test('output contains no advice or thresholds (facts only)', () => {
     'agent_id',
     'context_k',
     'context_tokens',
+    'matched_by',
     'source',
     'spawn_depth',
     'transcript',
@@ -251,4 +252,22 @@ test('--tag matching nothing is not_found even with own tags present', () => {
   const { status, out } = runTag(subOrchGrunt, 'run9-none');
   assert.equal(status, 2);
   assert.equal(out.error, 'not_found');
+});
+
+test('matched_by is own_tag for an exact own-tag match', () => {
+  assert.equal(runTag(subOrchGrunt, 'run1-a1b2').out.matched_by, 'own_tag');
+});
+
+test('matched_by is substring when only the fallback matches', () => {
+  const { out } = runTag(
+    { aa01: 'Please work on marker run1-zz9 today.', bb02: 'ORCH-TAG: run1-other\n' },
+    'run1-zz9',
+  );
+  assert.equal(out.agent_id, 'aa01');
+  assert.equal(out.matched_by, 'substring');
+});
+
+test('matched_by is null for --agent-id and for the main transcript', () => {
+  assert.equal(run(['--session-id', 'sess-0001', '--agent-id', 'aaaa1111']).out.matched_by, null);
+  assert.equal(run(['--session-id', 'sess-0001']).out.matched_by, null);
 });

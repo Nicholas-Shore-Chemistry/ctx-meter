@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { globExpr } from '../plugins/claude-context/scripts/lib/command.mjs';
+import { globExpr } from '../plugins/ctx-meter/scripts/lib/command.mjs';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const read = (f) => readFileSync(path.join(root, f), 'utf8');
@@ -17,8 +17,8 @@ test('LICENSE is MIT and acknowledges claude-hud', () => {
 
 test('README documents install, the two invocation names, and the no-advice contract', () => {
   const r = read('README.md');
-  assert.match(r, /\/plugin install claude-context/);
-  assert.match(r, /\/claude-context:setup/);
+  assert.match(r, /\/plugin install ctx-meter/);
+  assert.match(r, /\/ctx-meter:setup/);
   assert.match(r, /no (advice|recommendations)/i);
 });
 
@@ -29,9 +29,9 @@ test('CHANGELOG has an entry', () => {
 test('README documents co-existence, teardown, and the native-PowerShell regression', () => {
   const r = read('README.md');
   assert.match(r, /co-?exist/i);
-  assert.match(r, /\/claude-context:teardown/);
+  assert.match(r, /\/ctx-meter:teardown/);
   assert.match(r, /Git Bash/i);
-  // Preserve the substrings the earlier tests require: /plugin install, /claude-context:setup,
+  // Preserve the substrings the earlier tests require: /plugin install, /ctx-meter:setup,
   // and the no-advice phrase are still asserted by the existing README test above.
 });
 
@@ -50,9 +50,29 @@ test('setup.md and teardown.md embed the exact version-resolution pipeline globE
   const expr = globExpr();
   const body = expr.slice(expr.indexOf('$(')); // drop the `plugin_dir=` / `PLUGIN_DIR=` prefix
   for (const f of [
-    'plugins/claude-context/commands/setup.md',
-    'plugins/claude-context/commands/teardown.md',
+    'plugins/ctx-meter/commands/setup.md',
+    'plugins/ctx-meter/commands/teardown.md',
   ]) {
     assert.ok(read(f).includes(body), `${f} must embed the current globExpr() pipeline verbatim`);
   }
+});
+
+test('LICENSE keeps Ovid and adds Nicholas Shore', () => {
+  for (const f of ['LICENSE', 'plugins/ctx-meter/LICENSE']) {
+    const lic = read(f);
+    const ovid = lic.indexOf('Copyright (c) 2026 Ovid');
+    const nick = lic.indexOf('Copyright (c) 2026 Nicholas Shore');
+    assert.ok(ovid >= 0, f + ' keeps Ovid');
+    assert.ok(nick > ovid, f + ' adds Nicholas Shore under Ovid');
+    assert.match(lic, /claude-hud/i);
+  }
+});
+
+test('README opens with the credit', () => {
+  const lines = read('README.md').split(/\r?\n/);
+  assert.equal(lines[0], '# ctx-meter');
+  assert.equal(
+    lines[2],
+    'Created by Ovid ([Ovid/claude-context](https://github.com/Ovid/claude-context)), extended by Nicholas Shore.',
+  );
 });

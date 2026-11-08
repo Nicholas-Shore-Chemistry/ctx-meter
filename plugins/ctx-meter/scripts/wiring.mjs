@@ -4,7 +4,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { settingsPath, sidecarPath, backupPath } from './lib/config-dir.mjs';
 import { ensureDir, writeFileAtomic } from './lib/atomic-write.mjs';
-import { detectMarker } from './lib/marker.mjs';
+import { detectMarker, detectLegacyMarker } from './lib/marker.mjs';
 import { buildStatuslineCommand } from './lib/command.mjs';
 import { previewCommand } from './lib/redact.mjs';
 
@@ -51,6 +51,7 @@ function currentCommand(settings) {
 // rather than silently overwriting it with our own collector.
 function classify(command, hasStatusLine) {
   if (command == null) return hasStatusLine ? 'foreign' : 'empty';
+  if (detectLegacyMarker(command)) return 'legacy-claude-context';
   const marker = detectMarker(command);
   if (marker === 'collect') return 'ours-collect';
   if (marker === 'coexist') return 'ours-coexist';
@@ -155,6 +156,17 @@ export function wrap({ env = process.env, deps = fs, now = Date.now(), runtime }
   const command = currentCommand(base);
   const slot = classify(command, base.statusLine != null);
   const state = { backedUp: false, now, rawOriginal: raw };
+
+  // The upstream claude-context collector is still wired: wrapping it as foreign would run two
+  // collectors. Refuse before any write.
+  if (slot === 'legacy-claude-context') {
+    return {
+      action: 'refused-legacy',
+      slot,
+      message:
+        'The claude-context statusline is still wired. Run /claude-context:teardown first, then re-run /ctx-meter:setup. Nothing was changed.',
+    };
+  }
 
   const setVariant = (variant) => {
     // Build (and thus validate runtime) BEFORE any disk write, so a bad runtime never leaves

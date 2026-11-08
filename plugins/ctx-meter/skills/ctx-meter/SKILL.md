@@ -1,9 +1,9 @@
 ---
-description: Report the current session's resource facts — context-window occupancy, 5-hour and 7-day subscription usage, session cost, and compaction count — as pure measurements with provenance (human summary + machine-readable JSON block). Use when you or the user want to know how much context, quota, or cost the session has used — and, for agents and subagents, to gate your own behavior on those numbers: checkpoint or stop as context fills up (before Claude Code's auto-compaction silently drops CLAUDE.md guidance or recent instructions), or pause before exhausting the 5h/7d limit. Reports facts only; your instructions set the policy. Makes no recommendations.
-name: claude-context
+description: Report this session's context-window use, 5h and 7d subscription usage, cost and compactions, as facts with provenance. Agents and subagents can gate on it: checkpoint before auto-compaction, pause before the 5h/7d limit. Facts only; your instructions set the policy.
+name: ctx-meter
 ---
 
-# claude-context
+# ctx-meter
 
 This skill surfaces the current session's resource facts on demand, for both the
 user and agents (including subagents). It is an **instrument, not an advisor**: it
@@ -78,7 +78,7 @@ relay that output. If setup is cancelled or stops, relay the first report as-is.
   snapshot has ever been written).
 - **setup_required** — `true` only when no collector snapshot has ever been
   written (the not-set-up state): 5h/7d, cost, context, and compactions are all
-  `null` and the human block explains how to run `/claude-context:setup`. `false`
+  `null` and the human block explains how to run `/ctx-meter:setup`. `false`
   in every other state. Gate on this one field instead of inferring setup status
   from `source`/`rate_limits_status`.
 - **session_selection** — how the report decided whose numbers these are:
@@ -137,7 +137,9 @@ Output is one JSON line: `context_tokens` (the last assistant message's
 `input_tokens + cache_read_input_tokens + cache_creation_input_tokens`), `context_k`
 (that in thousands, rounded), `turns` (distinct assistant API messages), `agent_id`
 (`null` for the main transcript), `spawn_depth` (from the agent's meta file, else
-`null`), `transcript` (path read) and `source` (`"transcript"`). Errors are
+`null`), `matched_by` (`"own_tag"` or `"substring"` with `--tag`, else `null`;
+`"substring"` means the fallback matched, which can pick an agent that merely quotes the
+tag, so check it), `transcript` (path read) and `source` (`"transcript"`). Errors are
 `{"error": "<code>", "detail": "..."}` with exit code 2; codes are `no_session`,
 `not_found`, `ambiguous_tag`, `bad_args`, `no_usage`. It reports measurements only;
 the thresholds and what to do about them come from your instructions.
@@ -162,7 +164,7 @@ has ever been written:
   transcript I/O and returns everything `null` (including `compactions`, which is
   unknown rather than zero), `source: "unavailable"`,
   `rate_limits_status: "unavailable_collector"`, and `setup_required: true`; the
-  human block explains how to run `/claude-context:setup`.
+  human block explains how to run `/ctx-meter:setup`.
 
 Use the `source`, `rate_limits_status`, `setup_required`, and `session_selection`
 fields to judge how much to trust each number.

@@ -5,8 +5,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { buildStatuslineCommand } from '../plugins/claude-context/scripts/lib/command.mjs';
-import { detectMarker } from '../plugins/claude-context/scripts/lib/marker.mjs';
+import { buildStatuslineCommand } from '../plugins/ctx-meter/scripts/lib/command.mjs';
+import { detectMarker } from '../plugins/ctx-meter/scripts/lib/marker.mjs';
 
 test('marker round-trips through the built command, for both variants', () => {
   for (const variant of ['collect', 'coexist']) {
@@ -71,7 +71,7 @@ test('runtime is not shell-injectable into the persisted command', () => {
 // A legitimate runtime path containing a space must still exec (single-quoting, not rejection).
 test('a runtime path with a space still execs the target script', () => {
   const cfg = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-sp ace-'));
-  const scriptDir = path.join(cfg, 'plugins', 'cache', 'mk', 'claude-context', '0.3.0', 'scripts');
+  const scriptDir = path.join(cfg, 'plugins', 'cache', 'mk', 'ctx-meter', '0.3.0', 'scripts');
   fs.mkdirSync(scriptDir, { recursive: true });
   fs.writeFileSync(path.join(scriptDir, 'collect.mjs'), 'console.log("SPACE-OK");');
   // A wrapper "node" launcher living under a spaced path.
@@ -91,8 +91,8 @@ test('a runtime path with a space still execs the target script', () => {
 // This is the real guard against single-quote escaping bugs in the ported bash body.
 test('the built command resolves the newest plugin dir and execs the target script', () => {
   const cfg = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-cmd-'));
-  // Fake an installed plugin: <cfg>/plugins/cache/mk/claude-context/0.3.0/scripts/coexist.mjs
-  const scriptDir = path.join(cfg, 'plugins', 'cache', 'mk', 'claude-context', '0.3.0', 'scripts');
+  // Fake an installed plugin: <cfg>/plugins/cache/mk/ctx-meter/0.3.0/scripts/coexist.mjs
+  const scriptDir = path.join(cfg, 'plugins', 'cache', 'mk', 'ctx-meter', '0.3.0', 'scripts');
   fs.mkdirSync(scriptDir, { recursive: true });
   fs.writeFileSync(path.join(scriptDir, 'coexist.mjs'), 'console.log("EXEC-OK");');
   const cmd = buildStatuslineCommand({ variant: 'coexist', runtime: process.execPath });

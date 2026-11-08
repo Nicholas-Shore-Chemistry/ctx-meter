@@ -1,11 +1,13 @@
-# claude-context
+# ctx-meter
+
+Created by Ovid ([Ovid/claude-context](https://github.com/Ovid/claude-context)), extended by Nicholas Shore.
 
 > ⚠️ **Alpha software.** Early and actively changing: expect breaking changes between
 > versions and rough edges. **macOS, Linux, and Windows + Git Bash only** (POSIX shells) —
 > native PowerShell/cmd is unsupported this release. Everything setup touches is reversible
-> with `/claude-context:teardown`.
+> with `/ctx-meter:teardown`.
 
-**Your agents can't manage a budget they can't see.** `claude-context` gives Claude
+**Your agents can't manage a budget they can't see.** `ctx-meter` gives Claude
 Code and its subagents a live, machine-readable read of their own context window,
 subscription usage, and cost — so they can follow *your* rules about when to stop,
 checkpoint, or hand off.
@@ -38,7 +40,7 @@ guidance survives.
 
 ## The same goes for your budget
 
-Subscription limits are just as invisible to an agent mid-task. With `claude-context`
+Subscription limits are just as invisible to an agent mid-task. With `ctx-meter`
 it can honor guardrails you set:
 
 > *"If we're about to cross 80% of the weekly limit, summarize progress and pause."*
@@ -48,7 +50,7 @@ Your agents can only make those calls if they can read the numbers.
 
 ## Instrument, not advisor — on purpose
 
-`claude-context` gives **no advice and no recommendations** of its own — no baked-in
+`ctx-meter` gives **no advice and no recommendations** of its own — no baked-in
 thresholds, no "you should compact," no traffic lights. That's not a missing feature;
 it's the whole design. The plugin supplies the *facts*; **your** instructions supply
 the *policy*. The 40% rule, the budget guardrail, the checkpoint trigger — those live
@@ -69,51 +71,51 @@ it and wait. `/context` also can't show 5h/7d usage, cost, or compaction count a
 because those reach only the statusline (see [below](#turn-on-live-usage-and-cost)), never
 the transcript `/context` reads from.
 
-`claude-context` is for the other side of that line. Its report is backed by a plain script
+`ctx-meter` is for the other side of that line. Its report is backed by a plain script
 an agent runs and parses as JSON — the programmatic entry point `/context` lacks — and it
 carries the usage, cost, and compaction numbers `/context` can't see. **`/context` is for
-you; `claude-context` is for your agents.**
+you; `ctx-meter` is for your agents.**
 
 ## Install
 
 Add marketplace:
 
 ```
-/plugin marketplace add Ovid/claude-context
+/plugin marketplace add Nicholas-Shore-Chemistry/ctx-meter
 ```
 
 Install (must be a separate prompt):
 
 ```
-/plugin install claude-context@claude-context
+/plugin install ctx-meter@ctx-meter
 ```
 
 Set up:
 
 ```
-/claude-context:setup
+/ctx-meter:setup
 ```
 
 Then any agent — or you — can ask:
 
 ```
-/claude-context:claude-context
+/ctx-meter:ctx-meter
 ```
 
 Or:
 
 ```
-/claude-context
+/ctx-meter
 ```
 
-Reporting requires the one-time `/claude-context:setup` (see below). If it hasn't been
-run yet, the first `/claude-context` runs setup for you (with the same confirm before
+Reporting requires the one-time `/ctx-meter:setup` (see below). If it hasn't been
+run yet, the first `/ctx-meter` runs setup for you (with the same confirm before
 touching a statusline it doesn't own) and then reports; it never guesses at numbers it
 doesn't have. Once set up, it returns a short human summary **and** a
 machine-readable JSON block, so an agent can parse its own resource state directly:
 
 ```
-Claude Context — Opus 4.8 (1M context)
+ctx-meter — Opus 4.8 (1M context)
 Context: 25% used · 245k / 1M tokens · 755k headroom
 Session (5h): 9% used · resets in 2h 16m (at 14:30)
 Weekly (7d): 2% used · resets in 6d 21h
@@ -151,7 +153,7 @@ Put something like this in your `CLAUDE.md`, a skill, or a subagent prompt:
 ```markdown
 ## Resource guardrails
 
-Before starting a new subtask, run `/claude-context` and read the JSON block:
+Before starting a new subtask, run `/ctx-meter` and read the JSON block:
 
 - If `context.used_percentage` is above 50, write the current plan and open decisions
   to `PROGRESS.md`, then stop for review.
@@ -171,7 +173,7 @@ Every number in the report — context health included — comes from the collec
 enable it once:
 
 ```
-/claude-context:setup
+/ctx-meter:setup
 ```
 
 This wires a small statusline helper — the **collector** — into your Claude Code
@@ -184,7 +186,7 @@ statusline, over stdin, a few times a second. A slash command or skill run mid-s
 carries token counts but no usage and no cost. So the only way to see those numbers is
 to sit in the statusline slot, record each update to a private per-session snapshot,
 and read that snapshot back when the report runs. That snapshot is the entire reason
-`/claude-context:setup` exists — the collector is not a display, it's a tap.
+`/ctx-meter:setup` exists — the collector is not a display, it's a tap.
 
 When the collector owns the slot on its own, it also prints one line: tokens used against
 the model window, against the auto-compact window when one is configured, and each
@@ -196,21 +198,21 @@ Context 84k/1M 8% · 84k/400k 21% · 5h 50% 1h 49m · 7d 18% 5d 18h
 
 ### Already have a statusline?
 
-Only one thing can hold the statusline slot, so claude-context **co-exists** rather than
-evict. `/claude-context:setup` first copies your existing statusline command into a private
+Only one thing can hold the statusline slot, so ctx-meter **co-exists** rather than
+evict. `/ctx-meter:setup` first copies your existing statusline command into a private
 sidecar file, then puts itself in the slot as a wrapper that runs your original *and* taps
 its input for the snapshot. Both run; your **displayed line is unchanged**. Because the
-original was saved verbatim, `/claude-context:teardown` restores that exact statusline and
+original was saved verbatim, `/ctx-meter:teardown` restores that exact statusline and
 removes the sidecar. Setup **never** replaces or takes over a slot it doesn't own.
 
 Co-existence is available on **macOS, Linux, and Windows + Git Bash** in this alpha. On
-**native PowerShell/cmd** claude-context does not wire a statusline this release (a change
+**native PowerShell/cmd** ctx-meter does not wire a statusline this release (a change
 from 0.2.0, which shipped an empty-slot PowerShell collector) — run Claude Code from **Git
 Bash** for live numbers, or wait for a later release.
 
-**What if another statusline plugin later takes over the slot?** claude-context fails safe:
-your original command is still stored, `/claude-context:teardown` refuses to clobber the new
-tool and instead shows you the preserved original. claude-context stays one level deep — it
+**What if another statusline plugin later takes over the slot?** ctx-meter fails safe:
+your original command is still stored, `/ctx-meter:teardown` refuses to clobber the new
+tool and instead shows you the preserved original. ctx-meter stays one level deep — it
 co-exists with exactly one prior statusline, not several.
 
 ### Platform support and limits
@@ -258,7 +260,7 @@ cannot read its own private context this way.
 
 ## Credits
 
-`claude-context` adapts battle-tested statusline and transcript-parsing code from
+`ctx-meter` adapts battle-tested statusline and transcript-parsing code from
 [claude-hud](https://github.com/jarrodwatts/claude-hud) by Jarrod Watts, used under
 the MIT License. Thank you.
 

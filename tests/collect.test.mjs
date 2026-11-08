@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
-import { buildSnapshot, compactLine, runCli } from '../plugins/claude-context/scripts/collect.mjs';
+import { buildSnapshot, compactLine, runCli } from '../plugins/ctx-meter/scripts/collect.mjs';
 
 const stdin = {
   model: { id: 'claude-opus-4-8', display_name: 'Opus 4.8' },
@@ -135,7 +135,7 @@ test('runCli writes a session-keyed snapshot so concurrent sessions never share 
     readInput: async () => raw,
     env: { CLAUDE_CONFIG_DIR: cfg },
   });
-  const p = path.join(cfg, 'claude-context', 'snapshot-sid-xyz.json');
+  const p = path.join(cfg, 'ctx-meter', 'snapshot-sid-xyz.json');
   assert.ok(fs.existsSync(p), 'snapshot written to the session-keyed path');
   const snap = JSON.parse(fs.readFileSync(p, 'utf8'));
   assert.equal(snap.session_id, 'sid-xyz');
@@ -248,7 +248,7 @@ test('runCli reads the auto-compact window from the config dir settings', async 
     env: { CLAUDE_CONFIG_DIR: cfg },
   });
   const snap = JSON.parse(
-    fs.readFileSync(path.join(cfg, 'claude-context', 'snapshot-sid-acw.json'), 'utf8'),
+    fs.readFileSync(path.join(cfg, 'ctx-meter', 'snapshot-sid-acw.json'), 'utf8'),
   );
   assert.equal(snap.context.auto_compact_window, 400000);
   assert.equal(snap.context.auto_compact_window_source, 'user');

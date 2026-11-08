@@ -9,7 +9,7 @@ export function resolveConfigDir(env = process.env) {
 }
 
 export function snapshotDir(env = process.env) {
-  return path.join(resolveConfigDir(env), 'claude-context');
+  return path.join(resolveConfigDir(env), 'ctx-meter');
 }
 
 // Reduce a session id to a single filesystem-safe path segment. Returns null for
@@ -81,5 +81,5 @@ export function settingsPath(env = process.env) {
 }
 
 export function backupPath(env = process.env) {
-  return path.join(resolveConfigDir(env), 'settings.json.claude-context.bak');
+  return path.join(resolveConfigDir(env), 'settings.json.ctx-meter.bak');
 }

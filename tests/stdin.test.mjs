@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Readable } from 'node:stream';
-import { readStdin, parseStdinJson } from '../plugins/claude-context/scripts/lib/stdin.mjs';
+import { readStdin, parseStdinJson } from '../plugins/ctx-meter/scripts/lib/stdin.mjs';
 
 test('readStdin concatenates all chunks as UTF-8', async () => {
   const s = Readable.from([Buffer.from('{"a":'), Buffer.from('1}')]);

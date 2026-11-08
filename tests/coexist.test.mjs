@@ -6,18 +6,18 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { runCoexist } from '../plugins/claude-context/scripts/coexist.mjs';
+import { runCoexist } from '../plugins/ctx-meter/scripts/coexist.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const coexistPath = path.join(here, '..', 'plugins', 'claude-context', 'scripts', 'coexist.mjs');
+const coexistPath = path.join(here, '..', 'plugins', 'ctx-meter', 'scripts', 'coexist.mjs');
 
 // A temp config dir; optionally seed a sidecar whose stored original is `command`.
 function mkCfg(command) {
   const cfg = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-cox-'));
   if (command !== undefined) {
-    fs.mkdirSync(path.join(cfg, 'claude-context'), { recursive: true });
+    fs.mkdirSync(path.join(cfg, 'ctx-meter'), { recursive: true });
     fs.writeFileSync(
-      path.join(cfg, 'claude-context', 'coexist.json'),
+      path.join(cfg, 'ctx-meter', 'coexist.json'),
       JSON.stringify({
         original: { type: 'command', command },
         wrapped_at: new Date(0).toISOString(),
@@ -31,7 +31,7 @@ const STDIN = JSON.stringify({
   context_window: { context_window_size: 200000, current_usage: { input_tokens: 100000 } },
 });
 function snapFile(cfg) {
-  return path.join(cfg, 'claude-context', 'snapshot-sid-cox.json');
+  return path.join(cfg, 'ctx-meter', 'snapshot-sid-cox.json');
 }
 // Fake child for deterministic unit tests: records forwarded stdin; `close(code)` fires later.
 function fakeChild() {
@@ -286,7 +286,7 @@ test('broken-pipe original (large payload, child ignores stdin) never crashes th
 
 test('degraded branch also triggers for a MALFORMED-JSON sidecar (no spawn, code 0, our line)', async () => {
   const cfg = mkCfg('true'); // seed a valid sidecar dir/file, then corrupt it
-  fs.writeFileSync(path.join(cfg, 'claude-context', 'coexist.json'), '{ not valid json');
+  fs.writeFileSync(path.join(cfg, 'ctx-meter', 'coexist.json'), '{ not valid json');
   let out = '';
   const code = await runCoexist({
     now: 0,

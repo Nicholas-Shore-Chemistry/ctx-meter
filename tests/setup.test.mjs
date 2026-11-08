@@ -6,7 +6,7 @@ import path from 'node:path';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const setup = readFileSync(
-  path.join(root, 'plugins', 'claude-context', 'commands', 'setup.md'),
+  path.join(root, 'plugins', 'ctx-meter', 'commands', 'setup.md'),
   'utf8',
 );
 
@@ -60,6 +60,6 @@ test('setup treats non-msys/cygwin bash as native', () => {
 });
 
 test('references teardown and keeps the session-keyed snapshot verification glob', () => {
-  assert.match(setup, /\/claude-context:teardown/);
+  assert.match(setup, /\/ctx-meter:teardown/);
   assert.match(setup, /snapshot-\*\.json/);
 });

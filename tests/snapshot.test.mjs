@@ -9,7 +9,7 @@ import {
   readSnapshot,
   listSnapshotsByMtime,
   FRESHNESS_MS,
-} from '../plugins/claude-context/scripts/lib/snapshot.mjs';
+} from '../plugins/ctx-meter/scripts/lib/snapshot.mjs';
 
 function tmpFile() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-'));
@@ -111,13 +111,13 @@ test('writeSnapshot keeps the snapshot dir private (0700), tightening a pre-exis
   if (process.platform === 'win32') return; // POSIX modes only
   // Fresh dir: created private.
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-mode-'));
-  const dir = path.join(base, 'claude-context');
+  const dir = path.join(base, 'ctx-meter');
   writeSnapshot(path.join(dir, 'snapshot.json'), snap(), { now: 1000 });
   assert.equal(fs.statSync(dir).mode & 0o777, 0o700);
 
   // Pre-existing world-traversable dir (as an older version left it): tightened on write.
   const base2 = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-mode2-'));
-  const dir2 = path.join(base2, 'claude-context');
+  const dir2 = path.join(base2, 'ctx-meter');
   fs.mkdirSync(dir2, { recursive: true });
   fs.chmodSync(dir2, 0o755);
   writeSnapshot(path.join(dir2, 'snapshot.json'), snap(), { now: 1000 });

@@ -1,7 +1,7 @@
 // tests/redact.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { redactSecrets, previewCommand } from '../plugins/claude-context/scripts/lib/redact.mjs';
+import { redactSecrets, previewCommand } from '../plugins/ctx-meter/scripts/lib/redact.mjs';
 
 test('redactSecrets masks common secret shapes', () => {
   assert.match(

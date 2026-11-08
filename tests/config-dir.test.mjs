@@ -12,7 +12,7 @@ import {
   sidecarPath,
   settingsPath,
   backupPath,
-} from '../plugins/claude-context/scripts/lib/config-dir.mjs';
+} from '../plugins/ctx-meter/scripts/lib/config-dir.mjs';
 
 test('honors CLAUDE_CONFIG_DIR when set', () => {
   assert.equal(resolveConfigDir({ CLAUDE_CONFIG_DIR: '/tmp/cfg' }), '/tmp/cfg');
@@ -23,17 +23,17 @@ test('falls back to homedir/.claude', () => {
   assert.equal(resolveConfigDir({ CLAUDE_CONFIG_DIR: '  ' }), path.join(os.homedir(), '.claude'));
 });
 
-test('snapshotDir appends claude-context', () => {
+test('snapshotDir appends ctx-meter', () => {
   assert.equal(
     snapshotDir({ CLAUDE_CONFIG_DIR: '/tmp/cfg' }),
-    path.join('/tmp/cfg', 'claude-context'),
+    path.join('/tmp/cfg', 'ctx-meter'),
   );
 });
 
 test('snapshotPath keys the file by session id', () => {
   assert.equal(
     snapshotPath('abc-123', { CLAUDE_CONFIG_DIR: '/tmp/cfg' }),
-    path.join('/tmp/cfg', 'claude-context', 'snapshot-abc-123.json'),
+    path.join('/tmp/cfg', 'ctx-meter', 'snapshot-abc-123.json'),
   );
 });
 
@@ -85,10 +85,10 @@ test('resolveSessionId: --session-id arg wins, then env, else null; placeholders
   );
 });
 
-test('sidecarPath is coexist.json under claude-context', () => {
+test('sidecarPath is coexist.json under ctx-meter', () => {
   assert.equal(
     sidecarPath({ CLAUDE_CONFIG_DIR: '/tmp/cfg' }),
-    path.join('/tmp/cfg', 'claude-context', 'coexist.json'),
+    path.join('/tmp/cfg', 'ctx-meter', 'coexist.json'),
   );
 });
 
@@ -99,6 +99,6 @@ test('settingsPath and backupPath sit at the config-dir root', () => {
   );
   assert.equal(
     backupPath({ CLAUDE_CONFIG_DIR: '/tmp/cfg' }),
-    path.join('/tmp/cfg', 'settings.json.claude-context.bak'),
+    path.join('/tmp/cfg', 'settings.json.ctx-meter.bak'),
   );
 });

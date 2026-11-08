@@ -1,6 +1,6 @@
 // ESLint flat config (ESLint 10). DEV-ONLY: this and its devDependencies live in the
 // private root package.json and are never installed with the plugin (which ships only
-// plugins/claude-context/ and imports only `node:` built-ins).
+// plugins/ctx-meter/ and imports only `node:` built-ins).
 //
 // Recommended rules, with two allowances for this codebase's intentional patterns:
 //   - empty catch blocks are deliberate best-effort cleanup (e.g. unlink a temp file)

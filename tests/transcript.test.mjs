@@ -5,7 +5,7 @@ import path from 'node:path';
 import {
   lastAssistantUsage,
   countCompactions,
-} from '../plugins/claude-context/scripts/lib/transcript.mjs';
+} from '../plugins/ctx-meter/scripts/lib/transcript.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const session = path.join(here, 'fixtures', 'session.jsonl');

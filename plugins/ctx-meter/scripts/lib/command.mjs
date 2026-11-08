@@ -5,14 +5,14 @@ import { markerAssignment } from './marker.mjs';
 // to the shipped collect launcher in commands/setup.md. One resolver for both POSIX and Git
 // Bash: extract the version SEGMENT (awk -F/) and numeric-sort it. A whole-line `sort -V`
 // (the old gitbash branch) instead orders by the cache-id dir that PRECEDES the version, so
-// with claude-context cached under two cache-ids it can launch an older version (I1). Git Bash
+// with ctx-meter cached under two cache-ids it can launch an older version (I1). Git Bash
 // ships awk/grep/sort, and setup.md/teardown.md already run this exact form there.
 // ponytail: single resolver for both platforms; split again only if a target shell lacks awk.
 // Exported so a test can assert setup.md/teardown.md embed this exact pipeline — the three
 // copies (this JS + two markdown) share no code path, so a drift guard is the only safety net.
 export function globExpr() {
   return [
-    'plugin_dir=$(ls -d "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/plugins/cache/*/claude-context/*/ 2>/dev/null',
+    'plugin_dir=$(ls -d "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/plugins/cache/*/ctx-meter/*/ 2>/dev/null',
     '| awk -F/ \'{ print $(NF-1) "\\t" $0 }\'',
     "| grep -E '^[0-9]+\\.[0-9]+\\.[0-9]+[[:space:]]'",
     '| sort -t. -k1,1n -k2,2n -k3,3n -k4,4n | tail -1 | cut -f2-)',
@@ -30,7 +30,7 @@ export function buildStatuslineCommand({ variant, runtime }) {
   if (typeof runtime !== 'string' || runtime.trim() === '') throw new Error('runtime required');
   // markerAssignment throws on any non-collect/coexist variant before it reaches the script
   // path below, so no separate variant guard is needed here.
-  const marker = markerAssignment(variant); // CLAUDE_CONTEXT_WRAPPER=<variant>
+  const marker = markerAssignment(variant); // CTX_METER_WRAPPER=<variant>
   // bun auto-loads the project's .env on every tick (cwd = project dir); a stray
   // CLAUDE_CONFIG_DIR or NODE_OPTIONS there would poison the collector. Neutralize it (I2).
   const isBun = runtime.replace(/\\/g, '/').split('/').pop() === 'bun';

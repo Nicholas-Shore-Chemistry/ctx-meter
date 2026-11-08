@@ -1,5 +1,5 @@
-# Makefile — DEV tooling for the claude-context repo. None of this ships with the plugin:
-# the installed plugin is plugins/claude-context/ and imports only `node:` built-ins, while
+# Makefile — DEV tooling for the ctx-meter repo. None of this ships with the plugin:
+# the installed plugin is plugins/ctx-meter/ and imports only `node:` built-ins, while
 # ESLint/Prettier live in the private root package.json. Run `npm install` once first.
 # Every target self-documents with a `## ` comment; `make help` lists them.
 
@@ -8,7 +8,7 @@
 
 # The code is the shipped plugin's scripts plus the test suite (all *.mjs);
 # markdown, config, deps, and the vendored claude-hud/ are not counted.
-SRC_DIR  := plugins/claude-context/scripts
+SRC_DIR  := plugins/ctx-meter/scripts
 TEST_DIR := tests
 
 all: lint format test ## Lint (autofix), format, then run the test suite

@@ -98,6 +98,7 @@ export function ctxCheck({ sessionId, agentId = null, tag = null, configDir }) {
 
   let transcript = found.main;
   let id = null;
+  let matchedBy = null;
   if (tag) {
     let files = [];
     try {
@@ -110,6 +111,7 @@ export function ctxCheck({ sessionId, agentId = null, tag = null, configDir }) {
     // later tag lines (e.g. a grunt spawn prompt in a brief) do not count. Exact match first,
     // substring of the whole first message only if nothing matches exactly.
     const own = texts.filter(([, t]) => t.match(/^(?:ORCH-TAG|GRUNT-TAG):\s*(\S+)/m)?.[1] === tag);
+    matchedBy = own.length ? 'own_tag' : 'substring';
     const hits = (own.length ? own : texts.filter(([, t]) => t.includes(tag))).map(([f]) => f);
     const ids = hits.map((f) => f.slice('agent-'.length, -'.jsonl'.length));
     if (ids.length === 0)
@@ -148,6 +150,7 @@ export function ctxCheck({ sessionId, agentId = null, tag = null, configDir }) {
     turns: ids.size,
     agent_id: id,
     spawn_depth: id ? readMeta(found.subDir, id) : null,
+    matched_by: matchedBy,
     transcript,
     source: 'transcript',
   };

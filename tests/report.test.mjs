@@ -10,7 +10,7 @@ process.env.TZ = 'UTC';
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { assembleReport } from '../plugins/claude-context/scripts/report.mjs';
+import { assembleReport } from '../plugins/ctx-meter/scripts/report.mjs';
 
 const NOW = Date.parse('2026-07-07T13:00:04.000Z');
 const collectorRes = {
@@ -50,7 +50,7 @@ test('collector JSON block is pure measurements + provenance', () => {
 
 test('collector human block matches the contract', () => {
   const { human } = assembleReport(collectorRes, NOW);
-  assert.match(human, /^Claude Context — Opus 4\.8$/m);
+  assert.match(human, /^ctx-meter — Opus 4\.8$/m);
   assert.match(human, /^Context: 46% used · 92k \/ 200k tokens · 108k headroom$/m);
   assert.match(human, /^Session \(5h\): 25% used · resets in 1h 30m \(at 14:30\)$/m);
   assert.match(human, /^Weekly \(7d\): 61% used · resets in 3d 4h$/m); // >24h: no clock
@@ -103,7 +103,7 @@ test('collector available but a window is missing → factual copy, never "enabl
   const { human, json } = assembleReport(res, NOW);
   assert.match(human, /^Session \(5h\): unavailable — not reported for this window$/m);
   assert.match(human, /^Weekly \(7d\): unavailable — not reported for this window$/m);
-  assert.doesNotMatch(human, /\/claude-context:setup/); // collector is on; never say to enable it
+  assert.doesNotMatch(human, /\/ctx-meter:setup/); // collector is on; never say to enable it
   assert.equal(json.rate_limits_status, 'available');
 });
 
@@ -121,7 +121,7 @@ test('stale snapshot → unavailable_stale keeps the age and never tells the use
     human,
     /^Session \(5h\): unavailable — last collector reading 420s ago \(idle; send a message to refresh\)$/m,
   );
-  assert.doesNotMatch(human, /\/claude-context:setup/);
+  assert.doesNotMatch(human, /\/ctx-meter:setup/);
   assert.match(
     human,
     /^Source: transcript fallback · context only · window from snapshot · snapshot 420s old \(stale\) · session: unverified \(newest snapshot\)$/m,
@@ -160,7 +160,7 @@ test('stale snapshot, no transcript usage: reports the snapshot context as sourc
     human,
     /^Session \(5h\): unavailable — last collector reading 600s ago \(idle; send a message to refresh\)$/m,
   );
-  assert.doesNotMatch(human, /\/claude-context:setup/); // already set up — never tell them to run setup
+  assert.doesNotMatch(human, /\/ctx-meter:setup/); // already set up — never tell them to run setup
 });
 
 test('collector snapshot with an unpopulated window (0) renders "unavailable", never a literal null%', () => {
@@ -206,8 +206,8 @@ test('not set up (no snapshot ever): cold-start block + all-null JSON + setup_re
   };
   const { human, json } = assembleReport(res, NOW);
   // Human: the configure-the-tool block, and NO Context:/Source: lines.
-  assert.match(human, /^Claude Context — collector not configured$/m);
-  assert.match(human, /\/claude-context:setup/);
+  assert.match(human, /^ctx-meter — collector not configured$/m);
+  assert.match(human, /\/ctx-meter:setup/);
   assert.match(human, /Once it has run, this report returns live numbers\.$/m);
   assert.doesNotMatch(human, /^Context:/m);
   assert.doesNotMatch(human, /^Source:/m);
