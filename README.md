@@ -16,6 +16,25 @@ On demand, any agent in your session can ask *"how much have we used?"* and get 
 context-window occupancy, 5-hour and 7-day usage, session cost, and compaction count
 — as plain numbers it can branch on. You write the rule; the agent reads the gauge.
 
+## What this fork adds
+
+The original plugin, `claude-context`, is Ovid's. This fork is renamed `ctx-meter` and adds:
+
+- `ctx-check.mjs` reads one subagent's own context and turn count from its transcript, addressed
+  by `--agent-id` or `--tag`, and says how the tag matched (`matched_by`). The report itself only
+  sees the parent session's context.
+- If you set an auto-compact window, usage and headroom are also measured against it, not only
+  against the model window.
+- The statusline line shows used tokens against the model window and the auto-compact window,
+  and the time until the 5h and 7d windows reset.
+- On Windows, setup asks the Git Bash that Claude Code runs, so a PowerShell session on a machine
+  with Git Bash is no longer refused.
+- Extra `statusLine` keys such as `refreshInterval` and `padding` survive setup and teardown.
+- Setup and teardown can only be started by you, not by Claude.
+- Setup stops while `claude-context` is still wired, so two collectors never run at once.
+
+Details per release are in [CHANGELOG.md](./CHANGELOG.md).
+
 ## Why this matters: the silent auto-compaction trap
 
 When a session fills up, Claude Code **auto-compacts** — it summarizes the
@@ -95,6 +114,10 @@ Set up:
 ```
 /ctx-meter:setup
 ```
+
+Undo it any time with `/ctx-meter:teardown`. If you have the original `claude-context` plugin
+wired, setup refuses to continue: run `/claude-context:teardown` first, then
+`/ctx-meter:setup`.
 
 Then any agent — or you — can ask:
 
@@ -265,6 +288,10 @@ cannot read its own private context this way.
 `ctx-meter` adapts battle-tested statusline and transcript-parsing code from
 [claude-hud](https://github.com/jarrodwatts/claude-hud) by Jarrod Watts, used under
 the MIT License. Thank you.
+
+## Issues
+
+Report problems at <https://github.com/Nicholas-Shore-Chemistry/ctx-meter/issues>.
 
 ## License
 

@@ -1,19 +1,38 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
 
+First public release of this fork, renamed `ctx-meter`. Created by Ovid
+([Ovid/claude-context](https://github.com/Ovid/claude-context)), extended by Nicholas Shore.
+
+- **Renamed to `ctx-meter`.** The plugin, the marketplace, the commands (`/ctx-meter`,
+  `/ctx-meter:setup`, `/ctx-meter:teardown`), the config directory (`<config>/ctx-meter`) and
+  the statusline marker all use the new name. There is no compatibility shim: remove the old
+  `claude-context` wiring first.
+- **Setup refuses while `claude-context` is wired.** Run `/claude-context:teardown`, then
+  `/ctx-meter:setup`; nothing is changed until you do.
+- **Setup and teardown are user-only.** Both set `disable-model-invocation: true`, so Claude
+  can't start them on its own.
+- **Shorter report description.** The always-loaded skill description is shorter.
+- **`ctx-check.mjs` reports `matched_by`.** With `--tag` it says whether the agent matched by
+  its own tag (`own_tag`) or by the fallback substring match (`substring`); without `--tag` it
+  is `null`.
 - **`ctx-check.mjs --tag` matches an agent's own tag.** The own tag is the value on the first
   `ORCH-TAG:`/`GRUNT-TAG:` line of the agent's first message; `--tag` selects agents whose own
-  tag equals the value exactly, so a sub-orchestrator and its `<tag>-grunt...` helper (or a
-  brief quoting the grunt's spawn prompt) no longer give `ambiguous_tag`. If no agent matches
-  that way it falls back to the old substring match. Identical own tags stay ambiguous.
+  tag equals the value exactly, so two agents whose tags merely start the same no longer give
+  `ambiguous_tag`. If no agent matches that way it falls back to the old substring match.
+  Identical own tags stay ambiguous.
+- **Setup keeps other `statusLine` keys** such as `refreshInterval` and `padding`, on wrap and
+  on teardown.
+- **License and credit.** `LICENSE` keeps Ovid's notice and adds Nicholas Shore; the README and
+  both manifests credit Ovid first.
 
 ## 0.3.4
 
-Fork release ([redacted][redacted]/claude-context).
+Release of this fork.
 
 - **`ctx-check.mjs`: a sub-agent's own context.** A sub-agent shares its parent's session id,
-  so `report.mjs` gives it the controller's number. `scripts/ctx-check.mjs` reads one
+  so `report.mjs` gives it the parent session's number. `scripts/ctx-check.mjs` reads one
   agent's context (last assistant message's input + cache read + cache creation tokens) and
   turn count from its own transcript, addressed by `--agent-id` or by a `--tag` text found
   in the agent's first message; it also reports `spawn_depth` from the agent's meta file.
@@ -22,7 +41,7 @@ Fork release ([redacted][redacted]/claude-context).
 
 ## 0.3.3
 
-Fork release ([redacted][redacted]/claude-context).
+Release of this fork.
 
 - **Statusline: tokens and reset countdowns.** The collector's own line shows tokens used
   against the model window and the auto-compact window, next to the percentages, plus the
@@ -37,7 +56,7 @@ Fork release ([redacted][redacted]/claude-context).
 
 ## 0.3.2
 
-Fork release ([redacted][redacted]/claude-context). Two fixes; existing fields and states are
+Release of this fork. Two fixes; existing fields and states are
 unchanged when no auto-compact window is configured.
 
 - **Auto-compact window:** the report reads the configured auto-compact window

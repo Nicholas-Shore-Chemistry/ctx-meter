@@ -76,3 +76,38 @@ test('README opens with the credit', () => {
     'Created by Ovid ([Ovid/claude-context](https://github.com/Ovid/claude-context)), extended by Nicholas Shore.',
   );
 });
+
+test('README install uses Nicholas-Shore-Chemistry/ctx-meter', () => {
+  const r = read('README.md');
+  assert.ok(r.includes('/plugin marketplace add Nicholas-Shore-Chemistry/ctx-meter'));
+  assert.ok(r.includes('/plugin install ctx-meter@ctx-meter'));
+});
+
+test('README names /ctx-meter:setup and /ctx-meter:teardown', () => {
+  const r = read('README.md');
+  assert.ok(r.includes('/ctx-meter:setup'));
+  assert.ok(r.includes('/ctx-meter:teardown'));
+});
+
+test('README has no Ovid/claude-context install line', () => {
+  const r = read('README.md');
+  assert.doesNotMatch(r, /marketplace add Ovid/i);
+  assert.doesNotMatch(r, /\/plugin install claude-context/i);
+  assert.doesNotMatch(r, /Ovid\/claude-context\/issues/i);
+});
+
+test('README has a section on what the fork adds and links the issue tracker', () => {
+  const r = read('README.md');
+  assert.match(r, /^## What this fork adds/m);
+  assert.ok(r.includes('https://github.com/Nicholas-Shore-Chemistry/ctx-meter/issues'));
+  assert.match(r, /\/claude-context:teardown/);
+});
+
+test('CHANGELOG has a 0.4.0 entry naming ctx-meter', () => {
+  const c = read('CHANGELOG.md');
+  assert.match(c, /^## 0\.4\.0$/m);
+  const entry = c.split(/^## /m).find((s) => s.startsWith('0.4.0'));
+  assert.match(entry, /ctx-meter/);
+  assert.match(entry, /matched_by/);
+  assert.doesNotMatch(c, /^## Unreleased/m);
+});
