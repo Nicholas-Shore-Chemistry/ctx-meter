@@ -72,7 +72,7 @@ test('README opens with the credit', () => {
   const lines = read('README.md').split(/\r?\n/);
   assert.equal(lines[0], '# ctx-meter');
   assert.equal(
-    lines[2],
+    lines[2].replaceAll('**', ''),
     'Created by Ovid ([Ovid/claude-context](https://github.com/Ovid/claude-context)), extended by Nicholas Shore.',
   );
 });
@@ -96,9 +96,9 @@ test('README has no Ovid/claude-context install line', () => {
   assert.doesNotMatch(r, /Ovid\/claude-context\/issues/i);
 });
 
-test('README has a section on what the fork adds and links the issue tracker', () => {
+test('README has a section on what it does and links the issue tracker', () => {
   const r = read('README.md');
-  assert.match(r, /^## What this fork adds/m);
+  assert.match(r, /^## What it does/m);
   assert.ok(r.includes('https://github.com/Nicholas-Shore-Chemistry/ctx-meter/issues'));
   assert.match(r, /\/claude-context:teardown/);
 });

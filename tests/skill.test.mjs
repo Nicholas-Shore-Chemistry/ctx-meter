@@ -22,7 +22,7 @@ test("skill first-use defers to setup's confirm", () => {
 });
 
 test('frontmatter declares name and description', () => {
-  assert.match(skill, /^---\n[\s\S]*\nname:\s*ctx-meter\b/m);
+  assert.match(skill, /^---\r?\n[\s\S]*\r?\nname:\s*ctx-meter\b/m);
   assert.match(skill, /^description:\s*.+/m);
 });
 

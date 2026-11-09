@@ -24,7 +24,10 @@ First public release of this fork, renamed `ctx-meter`. Created by Ovid
   Identical own tags stay ambiguous.
 - **Setup keeps other `statusLine` keys** such as `refreshInterval` and `padding`, on wrap and
   on teardown.
-- **Fixes.** The skill description is quoted so the skill loads with its name and description; `ctx-check.mjs --tag` also knows `NESTOR-TAG:`; teardown never restores a `statusLine` without a command.
+- **Fixes.** The skill description is quoted so the skill loads with its name and description.
+  `ctx-check.mjs --tag` also knows `NESTOR-TAG:`. A sidecar restore on teardown still writes
+  back the original `statusLine` unchanged, string or array included. Only the backup fallback
+  drops a `statusLine` that is not a plain object with a non-blank string `command`.
 - **License and credit.** `LICENSE` keeps Ovid's notice and adds Nicholas Shore; the README and
   both manifests credit Ovid first.
 

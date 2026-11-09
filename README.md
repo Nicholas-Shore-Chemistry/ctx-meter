@@ -1,80 +1,68 @@
 # ctx-meter
 
-Created by Ovid ([Ovid/claude-context](https://github.com/Ovid/claude-context)), extended by Nicholas Shore.
+**Created by Ovid** ([Ovid/claude-context](https://github.com/Ovid/claude-context)), extended by Nicholas Shore.
 
 > ⚠️ **Alpha software.** Early and actively changing: expect breaking changes between
 > versions and rough edges. **macOS, Linux, and Windows + Git Bash only** (POSIX shells) —
 > native PowerShell/cmd is unsupported this release. Everything setup touches is reversible
 > with `/ctx-meter:teardown`.
 
-**Your agents can't manage a budget they can't see.** `ctx-meter` gives Claude
-Code and its subagents a live, machine-readable read of their own context window,
-subscription usage, and cost — so they can follow *your* rules about when to stop,
-checkpoint, or hand off.
+**Your agents can't manage a budget they can't see.** `ctx-meter` lets Claude Code and its
+subagents read their own context window, subscription usage and cost, as numbers.
 
-On demand, any agent in your session can ask *"how much have we used?"* and get back
-context-window occupancy, 5-hour and 7-day usage, session cost, and compaction count
-— as plain numbers it can branch on. You write the rule; the agent reads the gauge.
+Any agent in your session can ask how much has been used. It gets back context-window
+occupancy, 5-hour and 7-day usage, session cost and compaction count, plus where each
+figure came from and whether it is fresh. You write the rule. The agent reads the gauge.
 
-## What this fork adds
+## What it does
 
-The original plugin, `claude-context`, is Ovid's. This fork is renamed `ctx-meter` and adds:
-
-- `ctx-check.mjs` reads one subagent's own context and turn count from its transcript, addressed
-  by `--agent-id` or `--tag`, and says how the tag matched (`matched_by`). The report itself only
-  sees the parent session's context.
-- If you set an auto-compact window, usage and headroom are also measured against it, not only
-  against the model window.
-- The statusline line shows used tokens against the model window and the auto-compact window,
-  and the time until the 5h and 7d windows reset.
-- On Windows, setup asks the Git Bash that Claude Code runs, so a PowerShell session on a machine
-  with Git Bash is no longer refused.
-- Extra `statusLine` keys such as `refreshInterval` and `padding` survive setup and teardown.
-- Setup and teardown can only be started by you, not by Claude.
-- Setup stops while `claude-context` is still wired, so two collectors never run at once.
+- Reports the session's context, 5h/7d usage, cost and compactions on demand, as a readable
+  block and a JSON block.
+- `ctx-check.mjs` reads one subagent's own context and turn count from its transcript,
+  addressed by `--agent-id` or `--tag`, and says how the tag matched (`matched_by`). The
+  report itself only sees the parent session's context.
+- Measures usage and headroom against your auto-compact window too, if you set one.
+- Puts used tokens, both windows and the time until the 5h and 7d resets on the statusline.
+- Wraps a statusline you already run instead of replacing it. Extra `statusLine` keys such as
+  `refreshInterval` and `padding` survive setup and teardown.
+- On Windows, setup asks the Git Bash that Claude Code runs, so a PowerShell session on a
+  machine with Git Bash is no longer refused.
+- Setup and teardown can only be started by you, not by Claude. Setup stops while
+  `claude-context` is still wired, so two collectors never run at once.
 
 Details per release are in [CHANGELOG.md](./CHANGELOG.md).
 
-## Why this matters: the silent auto-compaction trap
+## Why: auto-compaction happens silently
 
-When a session fills up, Claude Code **auto-compacts** — it summarizes the
-conversation to make room. Helpful, until it quietly drops the very instructions you
-were relying on. This isn't hypothetical; it's a recurring, documented failure:
+When a session fills up, Claude Code auto-compacts. It summarizes the conversation to make
+room. Sometimes the summary drops the instructions you were relying on. Others have reported
+it:
 
 - Auto-compact loses the instructions from your most recent request —
   [claude-code#22376](https://github.com/anthropics/claude-code/issues/22376)
-- Your `CLAUDE.md` project rules get summarized away, and the agent stops following
+- Your `CLAUDE.md` project rules get summarized away and the agent stops following
   them — [claude-code#24460](https://github.com/anthropics/claude-code/issues/24460),
   [claude-code#6354](https://github.com/anthropics/claude-code/issues/6354)
 
-An agent working blind hits that wall at full speed. An agent that can **watch its
-own context percentage** doesn't. Give it a rule —
+An agent that cannot see its context percentage runs straight into that. One that can see
+it can act first, if you give it a rule:
 
 > *"Before context passes 50%, write the current plan and key decisions to
 > `PROGRESS.md`, then stop for review."*
 > *"Don't start a new subtask above 40% context."*
 
-— and it acts *before* the compaction it otherwise never sees coming, so your
-guidance survives.
-
-## The same goes for your budget
-
-Subscription limits are just as invisible to an agent mid-task. With `ctx-meter`
-it can honor guardrails you set:
+Subscription limits are just as hidden from an agent mid-task. Rules for those need the
+numbers too:
 
 > *"If we're about to cross 80% of the weekly limit, summarize progress and pause."*
 > *"Don't fan out three subagents when the 5-hour window is nearly spent."*
 
-Your agents can only make those calls if they can read the numbers.
+## Instrument, not advisor
 
-## Instrument, not advisor — on purpose
-
-`ctx-meter` gives **no advice and no recommendations** of its own — no baked-in
-thresholds, no "you should compact," no traffic lights. That's not a missing feature;
-it's the whole design. The plugin supplies the *facts*; **your** instructions supply
-the *policy*. The 40% rule, the budget guardrail, the checkpoint trigger — those live
-in your `CLAUDE.md`, your skills, and your subagent prompts, where you control them. A
-tool that hard-coded its own thresholds would just fight the ones you wrote.
+`ctx-meter` reports numbers and how far to trust them. It gives no advice: no built-in
+thresholds, no "you should compact", no traffic lights. The idea is Ovid's, and I kept it
+because it works. The plugin supplies the facts. Your `CLAUDE.md`, skills and subagent
+prompts supply the policy. A tool with its own thresholds would only fight yours.
 
 ## Doesn't `/context` already show this?
 
