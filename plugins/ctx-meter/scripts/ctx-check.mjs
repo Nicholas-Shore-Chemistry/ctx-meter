@@ -107,10 +107,10 @@ export function ctxCheck({ sessionId, agentId = null, tag = null, configDir }) {
       /* no subagents dir */
     }
     const texts = files.map((f) => [f, firstUserText(readJsonl(path.join(found.subDir, f)))]);
-    // An agent's own tag is the first ORCH-TAG/GRUNT-TAG line of its first message; quoted
+    // An agent's own tag is the first ORCH-TAG/GRUNT-TAG/NESTOR-TAG line of its first message; quoted
     // later tag lines (e.g. a grunt spawn prompt in a brief) do not count. Exact match first,
     // substring of the whole first message only if nothing matches exactly.
-    const own = texts.filter(([, t]) => t.match(/^(?:ORCH-TAG|GRUNT-TAG):\s*(\S+)/m)?.[1] === tag);
+    const own = texts.filter(([, t]) => t.match(/^(?:ORCH-TAG|GRUNT-TAG|NESTOR-TAG):\s*(\S+)/m)?.[1] === tag);
     matchedBy = own.length ? 'own_tag' : 'substring';
     const hits = (own.length ? own : texts.filter(([, t]) => t.includes(tag))).map(([f]) => f);
     const ids = hits.map((f) => f.slice('agent-'.length, -'.jsonl'.length));

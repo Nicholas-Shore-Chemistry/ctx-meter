@@ -1,5 +1,5 @@
 ---
-description: Report this session's context-window use, 5h and 7d subscription usage, cost and compactions, as facts with provenance. Agents and subagents can gate on it: checkpoint before auto-compaction, pause before the 5h/7d limit. Facts only; your instructions set the policy.
+description: "Report this session's context-window use, 5h and 7d subscription usage, cost and compactions, as facts with provenance. Agents and subagents can gate on it: checkpoint before auto-compaction, pause before the 5h/7d limit. Facts only; your instructions set the policy."
 name: ctx-meter
 ---
 

@@ -73,6 +73,8 @@ function withRestoredStatusLine(base, original) {
 // A `statusLine` OBJECT without a usable string command (extras only, e.g. hand-edited) is the
 // empty slot: setup wires into it and keeps its extras. A non-object `statusLine` (string,
 // array, ...) is still FOREIGN so we never overwrite something we cannot interpret.
+// Intended (ruling A1): an object whose `command` is unusable (blank, a number) counts as the
+// empty slot and setup overwrites it; only a non-object statusLine is protected as foreign.
 function classify(command, statusLine) {
   if (command == null) {
     if (statusLine == null) return 'empty';
@@ -86,8 +88,9 @@ function classify(command, statusLine) {
   return 'foreign';
 }
 // A sidecar is restorable when it holds ANY stored `original` — teardown must round-trip
-// exactly what wrap() stored, and wrap() deliberately stores a command-less foreign
-// statusLine verbatim (an object with no string `command`). The stricter "runnable command"
+// exactly what wrap() stored. Under A1 a command-less statusLine OBJECT is the empty slot, not
+// foreign, so wrap() never stores one; what it stores verbatim is a foreign statusLine with a
+// usable command, or a non-object (string, array, ...). The stricter "runnable command"
 // predicate lives only in coexist.mjs, where a command is needed to spawn the original.
 function readSidecar(env, deps) {
   const s = readJson(sidecarPath(env), deps);
@@ -289,7 +292,14 @@ export function teardown({ env = process.env, deps = fs } = {}) {
     const backup = readJson(backupPath(env), deps);
     if (backup && 'statusLine' in backup) {
       backupOnce(env, deps, state);
-      writeSettingsAtomic(env, deps, withRestoredStatusLine(base, backup.statusLine));
+      // Backup-fallback only: restore the backed-up statusLine only if it is a plain object with
+      // a non-blank string command; null or a command-less value would be schema-invalid, so
+      // statusLine is removed instead. (A sidecar restore above stays verbatim, per ruling A1.)
+      const bsl = backup.statusLine;
+      const usable = isPlainObject(bsl) && typeof bsl.command === 'string' && bsl.command.trim() !== '';
+      const restored = usable ? withRestoredStatusLine(base, bsl) : { ...base };
+      if (!usable) delete restored.statusLine;
+      writeSettingsAtomic(env, deps, restored);
       clearArtifacts();
       return { action: 'restored-from-backup' };
     }

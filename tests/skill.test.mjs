@@ -55,3 +55,24 @@ test('description is at most 350 characters and names context, 5h, 7d, cost', ()
   assert.ok(d.length <= 350, `description is ${d.length} chars`);
   for (const w of [/context/i, /5h/, /7d/, /cost/i]) assert.match(d, w);
 });
+
+test('frontmatter is valid YAML: plain scalars hold no ": ", name and description non-empty', () => {
+  const fm = skill.replace(/\r\n/g, '\n').match(/^---\n([\s\S]*?)\n---\n/);
+  assert.ok(fm, 'frontmatter block present');
+  const fields = {};
+  for (const line of fm[1].split('\n')) {
+    const m = line.match(/^([A-Za-z_-]+):\s*(.*)$/);
+    assert.ok(m, `top-level key: value line expected, got: ${line.slice(0, 40)}`);
+    let v = m[2].trim();
+    const quoted = /^"(?:[^"\\]|\\.)*"$/.test(v) || /^'(?:[^']|'')*'$/.test(v);
+    if (!quoted) {
+      assert.ok(!/: /.test(v), `unquoted plain scalar for ${m[1]} contains ": "`);
+      assert.ok(!/ #/.test(v), `unquoted plain scalar for ${m[1]} contains " #"`);
+    } else {
+      v = v.slice(1, -1);
+    }
+    fields[m[1]] = v;
+  }
+  assert.ok(fields.name && fields.name.length > 0, 'name non-empty');
+  assert.ok(fields.description && fields.description.length > 0, 'description non-empty');
+});

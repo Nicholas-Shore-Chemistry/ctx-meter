@@ -271,3 +271,18 @@ test('matched_by is null for --agent-id and for the main transcript', () => {
   assert.equal(run(['--session-id', 'sess-0001', '--agent-id', 'aaaa1111']).out.matched_by, null);
   assert.equal(run(['--session-id', 'sess-0001']).out.matched_by, null);
 });
+
+test('--tag resolves NESTOR-TAG owners; ORCH-TAG and GRUNT-TAG still work', () => {
+  const agents = {
+    ne01: 'NESTOR-TAG: run1-nest\nBrief quoting GRUNT-TAG: run1-g\n',
+    or01: 'ORCH-TAG: run1-orch\n',
+    gr01: 'GRUNT-TAG: run1-g\n',
+    // quotes the NestOr tag later in the message: not an own tag
+    qq01: 'ORCH-TAG: run1-q\nNESTOR-TAG: run1-nest\n',
+  };
+  const a = runTag(agents, 'run1-nest');
+  assert.equal(a.status, 0);
+  assert.equal(a.out.agent_id, 'ne01');
+  assert.equal(runTag(agents, 'run1-orch').out.agent_id, 'or01');
+  assert.equal(runTag(agents, 'run1-g').out.agent_id, 'gr01');
+});

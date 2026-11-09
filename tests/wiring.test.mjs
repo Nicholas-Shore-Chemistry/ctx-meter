@@ -647,3 +647,43 @@ test('teardown ignores the legacy claude-context marker', () => {
   assert.equal(r.action, 'not-ours');
   assert.equal(fs.readFileSync(path.join(cfg, 'settings.json'), 'utf8'), before);
 });
+
+test('teardown: lost sidecar, backup statusLine null → no statusLine key, valid file', () => {
+  const cfg = mkCfg();
+  writeSettings(cfg, { model: 'opus', statusLine: { type: 'command', command: COEXIST } });
+  fs.writeFileSync(
+    path.join(cfg, 'settings.json.ctx-meter.bak'),
+    JSON.stringify({ statusLine: null }),
+  );
+  const r = teardown({ env: { CLAUDE_CONFIG_DIR: cfg } });
+  assert.equal(r.action, 'restored-from-backup');
+  const s = readSettingsFile(cfg);
+  assert.equal('statusLine' in s, false);
+  assert.equal(s.model, 'opus');
+});
+
+test('teardown: lost sidecar, backup statusLine object without command → no statusLine key', () => {
+  const cfg = mkCfg();
+  writeSettings(cfg, { statusLine: { type: 'command', command: COEXIST } });
+  fs.writeFileSync(
+    path.join(cfg, 'settings.json.ctx-meter.bak'),
+    JSON.stringify({ statusLine: { type: 'command', padding: 1 } }),
+  );
+  const r = teardown({ env: { CLAUDE_CONFIG_DIR: cfg } });
+  assert.equal(r.action, 'restored-from-backup');
+  assert.equal('statusLine' in readSettingsFile(cfg), false);
+});
+
+test('wrap: resumed-coexist keeps statusLine extras such as refreshInterval', () => {
+  const cfg = mkCfg();
+  writeSettings(cfg, {
+    statusLine: { type: 'command', command: FOREIGN, refreshInterval: 30, padding: 2 },
+  });
+  writeSidecar(cfg, { type: 'command', command: FOREIGN });
+  const r = wrap({ env: { CLAUDE_CONFIG_DIR: cfg }, now: 0, runtime: RUNTIME });
+  assert.equal(r.action, 'resumed-coexist');
+  const sl = readSettingsFile(cfg).statusLine;
+  assert.equal(detectMarker(sl.command), 'coexist');
+  assert.equal(sl.refreshInterval, 30);
+  assert.equal(sl.padding, 2);
+});
