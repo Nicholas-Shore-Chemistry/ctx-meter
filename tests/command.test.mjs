@@ -87,6 +87,46 @@ test('a runtime path with a space still execs the target script', () => {
   assert.match(out, /SPACE-OK/);
 });
 
+// A git-subdir marketplace source caches the plugin as <version>-<commit sha>, e.g.
+// `0.4.0-ad2f7cf2bf2a`. The old filter required whitespace right after x.y.z, matched
+// nothing, left plugin_dir empty, and the statusline silently ran nothing.
+function fakeInstall(cfg, folder, tag) {
+  const scriptDir = path.join(cfg, 'plugins', 'cache', 'mk', 'ctx-meter', folder, 'scripts');
+  fs.mkdirSync(scriptDir, { recursive: true });
+  fs.writeFileSync(path.join(scriptDir, 'collect.mjs'), `console.log(${JSON.stringify(tag)});`);
+}
+
+function runCollect(cfg) {
+  const cmd = buildStatuslineCommand({ variant: 'collect', runtime: process.execPath });
+  return spawnSync('bash', ['-c', cmd], {
+    input: '{}',
+    env: { ...process.env, CLAUDE_CONFIG_DIR: cfg, HOME: cfg },
+    encoding: 'utf8',
+  }).stdout;
+}
+
+test('a <version>-<sha> cache folder (git-subdir install) is resolved', () => {
+  const cfg = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-sha-'));
+  fakeInstall(cfg, '0.4.0-ad2f7cf2bf2a', 'SHA-OK');
+  assert.match(runCollect(cfg), /SHA-OK/);
+});
+
+test('suffixed and plain folders still sort by version number', () => {
+  const cfg = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-sha-sort-'));
+  fakeInstall(cfg, '0.4.9-aaaaaaaaaaaa', 'OLD');
+  fakeInstall(cfg, '0.4.10-bbbbbbbbbbbb', 'NEW');
+  fakeInstall(cfg, '0.4.2', 'PLAIN-OLD');
+  assert.match(runCollect(cfg), /NEW/);
+});
+
+test('non-version cache folders are still ignored', () => {
+  const cfg = fs.mkdtempSync(path.join(os.tmpdir(), 'cc-sha-junk-'));
+  fakeInstall(cfg, '0.3.0-abc123', 'REAL');
+  fakeInstall(cfg, 'temp_git_99', 'JUNK');
+  fakeInstall(cfg, '9.9.9x', 'JUNK2');
+  assert.match(runCollect(cfg), /REAL/);
+});
+
 // End-to-end: the built command must actually execute and exec the resolved script.
 // This is the real guard against single-quote escaping bugs in the ported bash body.
 test('the built command resolves the newest plugin dir and execs the target script', () => {
