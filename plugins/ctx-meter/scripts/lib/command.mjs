@@ -7,6 +7,9 @@ import { markerAssignment } from './marker.mjs';
 // (the old gitbash branch) instead orders by the cache-id dir that PRECEDES the version, so
 // with ctx-meter cached under two cache-ids it can launch an older version (I1). Git Bash
 // ships awk/grep/sort, and setup.md/teardown.md already run this exact form there.
+// The grep accepts an optional `-<suffix>` / `+<suffix>` after x.y.z: a git-subdir marketplace
+// source caches the plugin as `<version>-<commit sha>` (e.g. `0.4.0-ad2f7cf2bf2a`). The numeric
+// sort still keys on the leading digits of each field, so the suffix does not disturb ordering.
 // ponytail: single resolver for both platforms; split again only if a target shell lacks awk.
 // Exported so a test can assert setup.md/teardown.md embed this exact pipeline — the three
 // copies (this JS + two markdown) share no code path, so a drift guard is the only safety net.
@@ -14,7 +17,7 @@ export function globExpr() {
   return [
     'plugin_dir=$(ls -d "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/plugins/cache/*/ctx-meter/*/ 2>/dev/null',
     '| awk -F/ \'{ print $(NF-1) "\\t" $0 }\'',
-    "| grep -E '^[0-9]+\\.[0-9]+\\.[0-9]+[[:space:]]'",
+    "| grep -E '^[0-9]+\\.[0-9]+\\.[0-9]+([-+][^[:space:]]*)?[[:space:]]'",
     '| sort -t. -k1,1n -k2,2n -k3,3n -k4,4n | tail -1 | cut -f2-)',
   ].join(' ');
 }

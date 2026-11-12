@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.1
+
+- **Fix: the statusline finds a `<version>-<sha>` cache folder.** A marketplace that pulls
+  ctx-meter from git (`git-subdir`, as NestOr does) caches it as e.g. `0.4.0-ad2f7cf2bf2a`.
+  The version filter required whitespace right after `x.y.z`, so it matched nothing, the
+  wired statusline ran no script and no snapshot was ever written. The filter now accepts an
+  optional `-<suffix>` or `+<suffix>`; sorting is unchanged. Re-run `/ctx-meter:setup` after
+  updating to rewrite the wired command.
+
 ## 0.4.0
 
 First public release of this fork, renamed `ctx-meter`. Created by Ovid
