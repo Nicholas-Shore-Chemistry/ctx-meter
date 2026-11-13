@@ -32,6 +32,23 @@ figure came from and whether it is fresh. You write the rule. The agent reads th
 
 Details per release are in [CHANGELOG.md](./CHANGELOG.md).
 
+### Which form should an agent call?
+
+Agents call the brief forms; they cost a fraction of the context tokens.
+
+- `report.mjs --format brief` prints at most three lines (about 150 bytes in the normal
+  state): the figures, then `source= age= limits= session=`, then one extra line only for
+  `setup_required=true` or a stale or unavailable state. The skill uses it.
+- `report.mjs --format json` prints the JSON block alone, for a rule that reads a field not in
+  the brief form. `--format human` prints the prose block. `--format both` is the default for
+  direct command-line use and prints the prose block followed by the JSON block, as before.
+- `ctx-check.mjs --brief` prints `{"context_k":87,"turns":41}` (plus `matched_by` only when it
+  is `"substring"`). `--no-turns` keeps the full output without `turns`, which skips the full
+  pass over the transcript. Without either flag the output is unchanged.
+
+`SKILL.md` is short on purpose. The full field list is in
+`plugins/ctx-meter/skills/ctx-meter/reference.md`.
+
 ## Why: auto-compaction happens silently
 
 When a session fills up, Claude Code auto-compacts. It summarizes the conversation to make

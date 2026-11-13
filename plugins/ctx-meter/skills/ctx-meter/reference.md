@@ -1,0 +1,141 @@
+# ctx-meter reference
+
+Read only if a field in the report is unclear. `SKILL.md` has what a caller needs to run
+and gate on the report; this file is the full field list, the ownership rules and the
+source states. The report is facts only.
+
+## Output forms
+
+`report.mjs --format brief|human|json|both` (default `both`). `brief` is at most three
+lines: the figures (`ctx`, `5h`, `7d`, cost, compactions; `n/a` where unavailable), then
+`source= age= limits= session=`, then one extra line only for `setup_required=true` or an
+unavailable/stale state. `json` is the block below on its own, with every field in the
+list. `human` is the prose block.
+
+## Field reference
+
+- **context.used_percentage** — percent of the context window in use (0–100).
+- **context.used_tokens / window_size / headroom_tokens** — tokens in use, the
+  window size, and tokens remaining. `used_tokens` = input + cache-read +
+  cache-creation.
+- **context.auto_compact_window / auto_compact_window_source** — the configured
+  auto-compact window in tokens, as read from `CLAUDE_CODE_AUTO_COMPACT_WINDOW`
+  (`env`) or the `autoCompactWindow` key (per model under `modelSettings`, or top
+  level) of the `local`, `project` or `user` settings file. `null` when none of these
+  sets it. The `--autocompact` launch flag, `--settings` and managed settings are not
+  visible to the plugin.
+- **context.auto_compact_used_percentage / auto_compact_headroom_tokens** — usage and
+  tokens remaining measured against the auto-compact window, capped at `window_size`
+  as Claude Code caps it. `null` when no auto-compact window is configured.
+- **context.input_tokens / cache_read_tokens / cache_creation_tokens / output_tokens**
+  — the token breakdown for the last measured turn.
+- **rate_limits.five_hour / seven_day** — subscription usage windows, each with
+  `used_percentage`, `resets_at` (ISO), and `resets_in_seconds`. Present only for
+  Pro/Max accounts after the first API response; otherwise `null`.
+- **cost_usd** — session cost in USD, or `null` when unavailable.
+- **compactions** — number of compaction boundaries in the transcript.
+- **source** — `collector` (a fresh snapshot, or — while idle — the stale
+  snapshot's own context field), `transcript` (collector idle: context
+  recomputed from the transcript against the stale snapshot's real window
+  size), or `unavailable` (no snapshot has ever been written; `compactions` is
+  also `null` in this state, since it is unknown rather than zero).
+- **rate_limits_status** — `available`; `unavailable_plan` (collector on, account
+  reports no subscription usage — either an API-key account or before the first
+  Pro/Max response); `unavailable_provider` (Bedrock/Vertex, which don't report
+  subscription usage); `unavailable_stale` (a snapshot exists but is past the
+  freshness window — collector on but idle); or `unavailable_collector` (no
+  snapshot has ever been written).
+- **setup_required** — `true` only when no collector snapshot has ever been
+  written (the not-set-up state): 5h/7d, cost, context, and compactions are all
+  `null` and the human block explains how to run `/ctx-meter:setup`. `false`
+  in every other state. Gate on this one field instead of inferring setup status
+  from `source`/`rate_limits_status`.
+- **session_selection** — how the report decided whose numbers these are:
+  `session_id` (matched this session's own id — the snapshot and its transcript are
+  definitively yours) or `unverified-snapshot` (this Claude Code build exposed no
+  session id, so the newest snapshot was used and may belong to another concurrent
+  same-account session). Omitted from the JSON in the not-set-up state, where there
+  are no numbers to attribute. Gate on this when it matters that the context figures
+  are your session's and not a neighbor's.
+- **snapshot_age_seconds** — how old the snapshot is (collector mode, or the age
+  of a stale snapshot reused in fallback).
+- **model** — the reporting session's model as `{ id, display_name }`. From the
+  collector, `id` carries the `[1m]` marker on a 1M-context session; from the
+  transcript fallback it is the base id (no marker) and `display_name` is empty.
+- **generated_at** — ISO-8601 time the report itself was produced. Distinct from
+  `snapshot_age_seconds` (the snapshot's age): use `generated_at` to tell how fresh
+  the *report* is, e.g. to ignore a cached copy.
+
+## Whose numbers are these?
+
+The **context** figures describe the **session** — the main agent's context window
+(the view Claude Code sends to the statusline). Subscription **usage (5h/7d)** and
+**cost** are **account-wide**, shared by the main agent and every subagent.
+
+Because several Claude Code sessions can run under one account at once, the collector
+keys its snapshot by session id and the report reads the one matching **your** session
+(`session_selection: "session_id"`). If your Claude Code build exposes no session id,
+the report falls back to the newest snapshot and flags it `unverified-snapshot` — in
+that state the context/compaction figures may be a neighbouring session's, while the
+account-wide 5h/7d/cost figures are identical across sessions and stay correct.
+
+If you are a subagent, the context percentage is the **session's**, not your own
+private window. Use it to judge whether the parent session is filling up — for
+example, to checkpoint results to a file before it auto-compacts — not as a gauge of
+your own subagent context, which this report does not measure.
+
+## Sub-agents: ctx-check (full output)
+
+`report.mjs` keys on the session id, which a sub-agent shares with its parent, so it
+returns the parent's context. To read one agent's own context from its transcript, run (with `$RT` resolved as in "How to run it"):
+
+```bash
+"$RT" "${CLAUDE_PLUGIN_ROOT}/scripts/ctx-check.mjs" [--session-id <id>] [--agent-id <id> | --tag <text>] [--brief | --no-turns]
+```
+
+- `--session-id` defaults to `CLAUDE_CODE_SESSION_ID`. With neither `--agent-id` nor
+  `--tag` it reads the main session transcript.
+- `--agent-id <id>` reads `subagents/agent-<id>.jsonl` of that session.
+- `--tag <text>` finds the one sub-agent whose own tag equals that text: the value on the
+  first `ORCH-TAG:` or `GRUNT-TAG:` line of its first message (a sub-agent does not know its
+  own agent id; tag lines quoted later in a brief do not count). Only if no agent matches
+  that way does it fall back to a literal substring match on the first message. Zero or
+  several matches are errors.
+
+`--brief` prints only `{"context_k", "turns"}` plus `matched_by` when it is `"substring"`.
+`--no-turns` keeps the full output but omits `turns`, which saves a full pass over the
+transcript. Otherwise output is one JSON line: `context_tokens` (the last assistant message's
+`input_tokens + cache_read_input_tokens + cache_creation_input_tokens`), `context_k`
+(that in thousands, rounded), `turns` (distinct assistant API messages), `agent_id`
+(`null` for the main transcript), `spawn_depth` (from the agent's meta file, else
+`null`), `matched_by` (`"own_tag"` or `"substring"` with `--tag`, else `null`;
+`"substring"` means the fallback matched, which can pick an agent that merely quotes the
+tag, so check it), `transcript` (path read) and `source` (`"transcript"`). Errors are
+`{"error": "<code>", "detail": "..."}` with exit code 2; codes are `no_session`,
+`not_found`, `ambiguous_tag`, `bad_args`, `no_usage`. It reports measurements only;
+the thresholds and what to do about them come from your instructions.
+
+## Sources and reliability
+
+The report resolves to exactly three states, keyed on whether a collector snapshot
+has ever been written:
+
+- **Collector** — a fresh snapshot exists. Full numbers: context, 5h/7d usage, cost,
+  and compactions, all `source: "collector"`, `rate_limits_status: "available"` (or
+  one of the `unavailable_plan` / `unavailable_provider` variants when the account
+  doesn't report subscription usage).
+- **Collector idle** — a snapshot exists but is past the freshness window. Context is
+  still accurate: recomputed from the transcript's latest usage against the stale
+  snapshot's real window size (`source: "transcript"`), or, when the transcript has
+  no usage to read, reported straight from the stale snapshot's own context field
+  (`source: "collector"`). Either way `rate_limits_status: "unavailable_stale"` and
+  5h/7d/cost are `null` — the collector is on, just not fresh, so it is never
+  mistaken for "collector not installed."
+- **Not set up** — no snapshot has ever been written. The report performs no
+  transcript I/O and returns everything `null` (including `compactions`, which is
+  unknown rather than zero), `source: "unavailable"`,
+  `rate_limits_status: "unavailable_collector"`, and `setup_required: true`; the
+  human block explains how to run `/ctx-meter:setup`.
+
+Use the `source`, `rate_limits_status`, `setup_required`, and `session_selection`
+fields to judge how much to trust each number.

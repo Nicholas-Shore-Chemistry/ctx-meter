@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.4.2
+
+Smaller footprint, no change to the default output shapes.
+
+- **Skill description is 98 characters (was 290).** It is the only part of the plugin resident
+  in every session that has the Skill tool.
+- **`SKILL.md` is 2.4k bytes (was 10.5k).** The full field reference and the "Sources and
+  reliability" section moved to `skills/ctx-meter/reference.md`, read only if a field is unclear.
+- **`report.mjs --format brief|human|json|both`.** `both` (the default) is the output of 0.4.1.
+  `brief` is at most three lines and about 150 bytes; the skill calls it.
+- **`ctx-check.mjs --brief` and `--no-turns`.** `--brief` prints `context_k` and `turns` (plus
+  `matched_by` only for `substring`); `--no-turns` omits `turns` and skips the full pass.
+- **`ctx-check.mjs` reads less.** `--tag` reads only the head of each sub-agent transcript
+  (64 KB, more only if the first message is longer); the last usage is found by reading from the
+  end of the file. Results are identical.
+- The collector is unchanged: a set `CLAUDE_CODE_AUTO_COMPACT_WINDOW` already skips the
+  settings-file reads.
+
 ## 0.4.1
 
 - **Fix: the statusline finds a `<version>-<sha>` cache folder.** A marketplace that pulls

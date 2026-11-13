@@ -372,3 +372,53 @@ test('no-advice contract holds for the auto-compact segment', () => {
     assert.doesNotMatch(blob, re);
   }
 });
+
+test('brief form: three lines at most, under 300 bytes, same facts as the JSON', () => {
+  const { brief, json } = assembleReport(collectorRes, NOW);
+  assert.equal(
+    brief,
+    'ctx 46% 92k/200k · 5h 25% reset 14:30 (1h30m) · 7d 61% reset 3d4h · $0.42 · compactions 1\n' +
+      'source=collector age=4s limits=available session=session_id',
+  );
+  assert.ok(Buffer.byteLength(brief) <= 300);
+  assert.equal(json.context.used_percentage, 46);
+});
+
+test('brief form: stale, unavailable and not-set-up states add one fact line', () => {
+  const stale = { ...collectorRes, rateLimits: null, rateLimitsStatus: 'unavailable_stale', snapshotAgeSeconds: 600, cost: null, compactions: null };
+  const b1 = assembleReport(stale, NOW).brief.split('\n');
+  assert.equal(b1.length, 3);
+  assert.match(b1[0], /5h n\/a · 7d n\/a · cost n\/a · compactions n\/a$/);
+  assert.match(b1[2], /^stale: last collector reading 600s ago/);
+  const plan = assembleReport({ ...collectorRes, rateLimits: null, rateLimitsStatus: 'unavailable_plan' }, NOW).brief.split('\n');
+  assert.equal(plan.length, 3);
+  const cold = assembleReport(
+    { source: 'unavailable', model: {}, context: null, rateLimits: null, rateLimitsStatus: 'unavailable_collector', cost: null, compactions: null, sessionSelection: null, snapshotAgeSeconds: null, setupRequired: true },
+    NOW,
+  ).brief.split('\n');
+  assert.equal(cold.length, 3);
+  assert.match(cold[2], /^setup_required=true/);
+  assert.equal(cold[1], 'source=unavailable limits=unavailable_collector');
+});
+
+test('brief form carries no advice vocabulary', () => {
+  for (const r of [collectorRes, { ...collectorRes, rateLimits: null, rateLimitsStatus: 'unavailable_stale' }]) {
+    const { brief } = assembleReport(r, NOW);
+    for (const re of [/should/i, /recommend/i, /\bpressure\b/i, /traffic.light/i]) assert.doesNotMatch(brief, re);
+  }
+});
+
+test('renderReport formats: both is the legacy output, json is the block only', async () => {
+  const { renderReport, parseFormat } = await import('../plugins/ctx-meter/scripts/report.mjs');
+  const { human, json } = assembleReport(collectorRes, NOW);
+  const legacy = `${human}\n\n\`\`\`json\n${JSON.stringify(json, null, 2)}\n\`\`\`\n`;
+  assert.equal(renderReport(collectorRes, NOW), legacy);
+  assert.equal(renderReport(collectorRes, NOW, 'both'), legacy);
+  assert.equal(renderReport(collectorRes, NOW, 'json'), legacy.slice(legacy.indexOf('```json')));
+  assert.equal(renderReport(collectorRes, NOW, 'human'), `${human}\n`);
+  assert.equal(renderReport(collectorRes, NOW, 'brief'), `${assembleReport(collectorRes, NOW).brief}\n`);
+  assert.equal(parseFormat(['--session-id', 'x', '--format', 'brief']), 'brief');
+  assert.equal(parseFormat(['--format=json']), 'json');
+  assert.equal(parseFormat([]), 'both');
+  assert.equal(parseFormat(['--format', 'bogus']), 'both');
+});
