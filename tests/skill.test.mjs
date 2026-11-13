@@ -50,9 +50,9 @@ test('documents ctx-check for sub-agents', () => {
   assert.match(skill, /scripts\/ctx-check\.mjs/);
 });
 
-test('description is at most 350 characters and names context, 5h, 7d, cost', () => {
+test('description is at most 120 characters and names context, 5h, 7d, cost', () => {
   const d = skill.match(/^description:\s*(.+)$/m)[1].trim();
-  assert.ok(d.length <= 350, `description is ${d.length} chars`);
+  assert.ok(d.length <= 120, `description is ${d.length} chars`);
   for (const w of [/context/i, /5h/, /7d/, /cost/i]) assert.match(d, w);
 });
 
@@ -75,4 +75,28 @@ test('frontmatter is valid YAML: plain scalars hold no ": ", name and descriptio
   }
   assert.ok(fields.name && fields.name.length > 0, 'name non-empty');
   assert.ok(fields.description && fields.description.length > 0, 'description non-empty');
+});
+
+test('SKILL.md is at most 2.5k bytes and the skill calls the brief form', () => {
+  assert.ok(Buffer.byteLength(skill) <= 2500, `SKILL.md is ${Buffer.byteLength(skill)} bytes`);
+  assert.match(skill, /report\.mjs"[^\n]*--format brief/);
+  assert.match(skill, /ctx-check\.mjs"[^\n]*--brief/);
+});
+
+test('SKILL.md names the five gate fields and links reference.md', () => {
+  for (const f of [
+    'context.used_percentage',
+    'rate_limits',
+    'rate_limits_status',
+    'setup_required',
+    'session_selection',
+  ])
+    assert.ok(skill.includes(f), f);
+  assert.match(skill, /skills\/ctx-meter\/reference\.md/);
+  const ref = readFileSync(
+    path.join(root, 'plugins', 'ctx-meter', 'skills', 'ctx-meter', 'reference.md'),
+    'utf8',
+  );
+  assert.match(ref, /## Field reference/);
+  assert.match(ref, /## Sources and reliability/);
 });

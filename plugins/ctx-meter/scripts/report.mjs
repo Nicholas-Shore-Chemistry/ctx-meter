@@ -352,8 +352,87 @@ function buildHuman(r, now) {
   return lines.join('\n');
 }
 
+// Compact duration for the brief form: 3d17h, 4h48m, 12m.
+function shortDuration(totalSeconds) {
+  const m = Math.floor(totalSeconds / 60);
+  const d = Math.floor(m / 1440);
+  const h = Math.floor((m % 1440) / 60);
+  if (d > 0) return `${d}d${h}h`;
+  if (h > 0) return `${h}h${m % 60}m`;
+  return `${m}m`;
+}
+
+function briefWindow(label, r, w, now) {
+  if (r.rateLimitsStatus !== 'available' || !w || w.used_percentage == null)
+    return `${label} n/a`;
+  let out = `${label} ${w.used_percentage}%`;
+  const secs = resetsInSeconds(w.resets_at, now);
+  if (secs != null) {
+    const ms = Date.parse(w.resets_at);
+    const dur = shortDuration(secs);
+    out += ms - now < 24 * 3600 * 1000 ? ` reset ${clockHM(new Date(ms))} (${dur})` : ` reset ${dur}`;
+  }
+  return out;
+}
+
+// At most three lines: the figures, the provenance, and (only when something is missing)
+// one fact line. Same facts as the JSON block, no labels or recommendations.
+function buildBrief(r, now) {
+  const c = r.context;
+  const ctx =
+    c && c.used_percentage != null
+      ? `ctx ${c.used_percentage}% ${kt(c.used_tokens)}/${kt(c.window_size)}`
+      : 'ctx n/a';
+  const line1 = [
+    ctx,
+    briefWindow('5h', r, r.rateLimits?.five_hour, now),
+    briefWindow('7d', r, r.rateLimits?.seven_day, now),
+    r.cost != null ? `$${r.cost.toFixed(2)}` : 'cost n/a',
+    `compactions ${r.compactions ?? 'n/a'}`,
+  ].join(' · ');
+  const line2 = [`source=${r.source}`];
+  if (r.snapshotAgeSeconds != null) line2.push(`age=${r.snapshotAgeSeconds}s`);
+  line2.push(`limits=${r.rateLimitsStatus}`);
+  if (r.sessionSelection) line2.push(`session=${r.sessionSelection}`);
+  const lines = [line1, line2.join(' ')];
+  if (r.setupRequired) {
+    lines.push('setup_required=true (no collector snapshot has been written; /ctx-meter:setup)');
+  } else if (r.rateLimitsStatus === 'unavailable_stale') {
+    lines.push(`stale: last collector reading ${r.snapshotAgeSeconds}s ago; 5h, 7d and cost unavailable`);
+  } else if (r.rateLimitsStatus !== 'available') {
+    lines.push('5h and 7d unavailable: no subscription usage reported');
+  }
+  return lines.join('\n');
+}
+
 export function assembleReport(r, now) {
-  return { human: buildHuman(r, now), json: buildJson(r, now) };
+  return { human: buildHuman(r, now), json: buildJson(r, now), brief: buildBrief(r, now) };
+}
+
+export const FORMATS = ['brief', 'human', 'json', 'both'];
+
+export function renderReport(r, now, format = 'both') {
+  const { human, json, brief } = assembleReport(r, now);
+  const block = `\`\`\`json\n${JSON.stringify(json, null, 2)}\n\`\`\`\n`;
+  switch (format) {
+    case 'brief':
+      return `${brief}\n`;
+    case 'human':
+      return `${human}\n`;
+    case 'json':
+      return block;
+    default:
+      return `${human}\n\n${block}`;
+  }
+}
+
+export function parseFormat(argv) {
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    const v = a === '--format' ? argv[i + 1] : a.startsWith('--format=') ? a.slice(9) : undefined;
+    if (v !== undefined) return FORMATS.includes(v) ? v : 'both';
+  }
+  return 'both';
 }
 
 const isMain = import.meta.url === pathToFileURL(process.argv[1] ?? '').href;
@@ -367,9 +446,5 @@ if (isMain) {
     deps: fs,
     env: process.env,
   });
-  const { human, json } = assembleReport(resolution, now);
-  process.stdout.write(`${human}\n\n`);
-  process.stdout.write('```json\n');
-  process.stdout.write(`${JSON.stringify(json, null, 2)}\n`);
-  process.stdout.write('```\n');
+  process.stdout.write(renderReport(resolution, now, parseFormat(process.argv.slice(2))));
 }

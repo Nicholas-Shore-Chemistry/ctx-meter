@@ -8,6 +8,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { resolveConfigDir, resolveSessionId } from './lib/config-dir.mjs';
 import { usedTokens } from './lib/token-math.mjs';
+import { findFirst, findLast } from './lib/jsonl-io.mjs';
 
 class CheckError extends Error {
   constructor(code, detail) {
@@ -19,10 +20,15 @@ class CheckError extends Error {
 const SAFE_ID = /^[A-Za-z0-9._-]+$/;
 
 export function parseArgs(argv) {
-  const out = { sessionId: null, agentId: null, tag: null };
+  const out = { sessionId: null, agentId: null, tag: null, brief: false, noTurns: false };
   const flags = { '--session-id': 'sessionId', '--agent-id': 'agentId', '--tag': 'tag' };
+  const bools = { '--brief': 'brief', '--no-turns': 'noTurns' };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
+    if (bools[a]) {
+      out[bools[a]] = true;
+      continue;
+    }
     const eq = a.indexOf('=');
     const name = eq > 0 ? a.slice(0, eq) : a;
     const key = flags[name];
@@ -53,8 +59,8 @@ function readJsonl(file) {
   return out;
 }
 
-function firstUserText(entries) {
-  const e = entries.find((x) => x?.type === 'user');
+function firstUserText(file) {
+  const e = findFirst(file, (x) => x?.type === 'user');
   const c = e?.message?.content;
   if (typeof c === 'string') return c;
   if (Array.isArray(c)) return c.map((b) => (typeof b?.text === 'string' ? b.text : '')).join('\n');
@@ -86,7 +92,13 @@ function findSession(configDir, sessionId) {
   return null;
 }
 
-export function ctxCheck({ sessionId, agentId = null, tag = null, configDir }) {
+export function ctxCheck({
+  sessionId,
+  agentId = null,
+  tag = null,
+  configDir,
+  withTurns = true,
+}) {
   if (!sessionId || !SAFE_ID.test(sessionId))
     throw new CheckError(
       'no_session',
@@ -106,7 +118,7 @@ export function ctxCheck({ sessionId, agentId = null, tag = null, configDir }) {
     } catch {
       /* no subagents dir */
     }
-    const texts = files.map((f) => [f, firstUserText(readJsonl(path.join(found.subDir, f)))]);
+    const texts = files.map((f) => [f, firstUserText(path.join(found.subDir, f))]);
     // An agent's own tag is the first ORCH-TAG/GRUNT-TAG/NESTOR-TAG line of its first message; quoted
     // later tag lines (e.g. a grunt spawn prompt in a brief) do not count. Exact match first,
     // substring of the whole first message only if nothing matches exactly.
@@ -130,16 +142,28 @@ export function ctxCheck({ sessionId, agentId = null, tag = null, configDir }) {
   if (!fs.existsSync(transcript))
     throw new CheckError('not_found', `no transcript at ${transcript}`);
 
-  const entries = readJsonl(transcript);
-  const ids = new Set();
-  let usage = null;
-  let anon = 0;
-  for (const e of entries) {
-    if (e?.type !== 'assistant') continue;
+  const entryUsage = (e) => {
+    if (e?.type !== 'assistant') return null;
     const u = e?.message?.usage ?? e?.usage;
-    if (!u || typeof u !== 'object') continue;
-    ids.add(typeof e?.message?.id === 'string' ? e.message.id : `anon-${anon++}`);
-    usage = u;
+    return u && typeof u === 'object' ? u : null;
+  };
+  let turns = null;
+  let usage = null;
+  if (withTurns) {
+    // turns needs every assistant message id: one full pass.
+    const ids = new Set();
+    let anon = 0;
+    for (const e of readJsonl(transcript)) {
+      const u = entryUsage(e);
+      if (!u) continue;
+      ids.add(typeof e?.message?.id === 'string' ? e.message.id : `anon-${anon++}`);
+      usage = u;
+    }
+    turns = ids.size;
+  } else {
+    // Last usage only: read the file from its end.
+    const last = findLast(transcript, (e) => entryUsage(e) !== null);
+    usage = last ? entryUsage(last) : null;
   }
   if (!usage) throw new CheckError('no_usage', `no assistant usage in ${transcript}`);
 
@@ -147,7 +171,7 @@ export function ctxCheck({ sessionId, agentId = null, tag = null, configDir }) {
   return {
     context_tokens: ctx,
     context_k: Math.round(ctx / 1000),
-    turns: ids.size,
+    turns,
     agent_id: id,
     spawn_depth: id ? readMeta(found.subDir, id) : null,
     matched_by: matchedBy,
@@ -165,8 +189,18 @@ export function runCli(argv = process.argv.slice(2), env = process.env) {
       agentId: a.agentId,
       tag: a.tag,
       configDir: resolveConfigDir(env),
+      withTurns: !a.noTurns,
     });
-    process.stdout.write(JSON.stringify(res) + '\n');
+    let outObj = res;
+    if (a.brief) {
+      outObj = { context_k: res.context_k };
+      if (res.turns != null) outObj.turns = res.turns;
+      if (res.matched_by === 'substring') outObj.matched_by = 'substring';
+    } else if (a.noTurns) {
+      const { turns: _omit, ...rest } = res;
+      outObj = rest;
+    }
+    process.stdout.write(JSON.stringify(outObj) + '\n');
     return 0;
   } catch (err) {
     const code = err instanceof CheckError ? err.code : 'not_found';
