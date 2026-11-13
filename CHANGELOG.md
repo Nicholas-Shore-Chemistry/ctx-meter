@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.0
+
+- **`ctx-check.mjs --usage`.** Adds five fields to the JSON, from one full pass over the
+  agent's transcript:
+  - `first`: the first assistant message's `input_tokens`, `cache_read_input_tokens` and
+    `cache_creation_input_tokens` (the start-up context and how much of it was a cache hit);
+  - `sum`: `input_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens` and
+    `output_tokens` summed over all distinct assistant messages, de-duplicated by message id
+    as `turns` is (a message written as several lines counts once, with its last line's usage);
+  - `model` of the last assistant message (`<synthetic>` entries are skipped), and
+    `first_ts` / `last_ts`, the timestamps of the first and last assistant lines.
+  Combines with `--brief` (the five fields are appended) and `--no-turns` (`turns` stays
+  omitted, the full pass still runs). Without `--usage` the output is unchanged.
+
 ## 0.4.2
 
 Smaller footprint, no change to the default output shapes.
