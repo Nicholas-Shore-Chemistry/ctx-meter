@@ -363,14 +363,14 @@ function shortDuration(totalSeconds) {
 }
 
 function briefWindow(label, r, w, now) {
-  if (r.rateLimitsStatus !== 'available' || !w || w.used_percentage == null)
-    return `${label} n/a`;
+  if (r.rateLimitsStatus !== 'available' || !w || w.used_percentage == null) return `${label} n/a`;
   let out = `${label} ${w.used_percentage}%`;
   const secs = resetsInSeconds(w.resets_at, now);
   if (secs != null) {
     const ms = Date.parse(w.resets_at);
     const dur = shortDuration(secs);
-    out += ms - now < 24 * 3600 * 1000 ? ` reset ${clockHM(new Date(ms))} (${dur})` : ` reset ${dur}`;
+    out +=
+      ms - now < 24 * 3600 * 1000 ? ` reset ${clockHM(new Date(ms))} (${dur})` : ` reset ${dur}`;
   }
   return out;
 }
@@ -398,7 +398,9 @@ function buildBrief(r, now) {
   if (r.setupRequired) {
     lines.push('setup_required=true (no collector snapshot has been written; /ctx-meter:setup)');
   } else if (r.rateLimitsStatus === 'unavailable_stale') {
-    lines.push(`stale: last collector reading ${r.snapshotAgeSeconds}s ago; 5h, 7d and cost unavailable`);
+    lines.push(
+      `stale: last collector reading ${r.snapshotAgeSeconds}s ago; 5h, 7d and cost unavailable`,
+    );
   } else if (r.rateLimitsStatus !== 'available') {
     lines.push('5h and 7d unavailable: no subscription usage reported');
   }
