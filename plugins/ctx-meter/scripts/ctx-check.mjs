@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { resolveConfigDir, resolveSessionId } from './lib/config-dir.mjs';
-import { usedTokens } from './lib/token-math.mjs';
+import { num, usedTokens } from './lib/token-math.mjs';
 import { findFirst, findLast } from './lib/jsonl-io.mjs';
 
 class CheckError extends Error {
@@ -20,9 +20,16 @@ class CheckError extends Error {
 const SAFE_ID = /^[A-Za-z0-9._-]+$/;
 
 export function parseArgs(argv) {
-  const out = { sessionId: null, agentId: null, tag: null, brief: false, noTurns: false };
+  const out = {
+    sessionId: null,
+    agentId: null,
+    tag: null,
+    brief: false,
+    noTurns: false,
+    usage: false,
+  };
   const flags = { '--session-id': 'sessionId', '--agent-id': 'agentId', '--tag': 'tag' };
-  const bools = { '--brief': 'brief', '--no-turns': 'noTurns' };
+  const bools = { '--brief': 'brief', '--no-turns': 'noTurns', '--usage': 'usage' };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (bools[a]) {
@@ -98,6 +105,7 @@ export function ctxCheck({
   tag = null,
   configDir,
   withTurns = true,
+  withUsage = false,
 }) {
   if (!sessionId || !SAFE_ID.test(sessionId))
     throw new CheckError(
@@ -122,7 +130,9 @@ export function ctxCheck({
     // An agent's own tag is the first ORCH-TAG/GRUNT-TAG/NESTOR-TAG line of its first message; quoted
     // later tag lines (e.g. a grunt spawn prompt in a brief) do not count. Exact match first,
     // substring of the whole first message only if nothing matches exactly.
-    const own = texts.filter(([, t]) => t.match(/^(?:ORCH-TAG|GRUNT-TAG|NESTOR-TAG):\s*(\S+)/m)?.[1] === tag);
+    const own = texts.filter(
+      ([, t]) => t.match(/^(?:ORCH-TAG|GRUNT-TAG|NESTOR-TAG):\s*(\S+)/m)?.[1] === tag,
+    );
     matchedBy = own.length ? 'own_tag' : 'substring';
     const hits = (own.length ? own : texts.filter(([, t]) => t.includes(tag))).map(([f]) => f);
     const ids = hits.map((f) => f.slice('agent-'.length, -'.jsonl'.length));
@@ -149,17 +159,45 @@ export function ctxCheck({
   };
   let turns = null;
   let usage = null;
-  if (withTurns) {
-    // turns needs every assistant message id: one full pass.
-    const ids = new Set();
+  let usageFacts = null;
+  if (withTurns || withUsage) {
+    // turns and --usage need every assistant message id: one full pass. One API message can
+    // span several transcript lines (one per content block); the last line's usage stands for it.
+    const byId = new Map();
     let anon = 0;
+    let firstTs = null;
+    let lastTs = null;
+    let model = null;
     for (const e of readJsonl(transcript)) {
       const u = entryUsage(e);
       if (!u) continue;
-      ids.add(typeof e?.message?.id === 'string' ? e.message.id : `anon-${anon++}`);
+      const mid = typeof e?.message?.id === 'string' ? e.message.id : `anon-${anon++}`;
+      byId.set(mid, u); // keeps the id's first-seen position, updates its usage
       usage = u;
+      if (typeof e?.timestamp === 'string') {
+        firstTs ??= e.timestamp;
+        lastTs = e.timestamp;
+      }
+      const m = e?.message?.model;
+      if (typeof m === 'string' && m !== '<synthetic>') model = m;
     }
-    turns = ids.size;
+    turns = byId.size;
+    if (withUsage && byId.size) {
+      const fu = byId.values().next().value; // Map iterates in first-seen order
+      const first = {
+        input_tokens: num(fu.input_tokens),
+        cache_read_input_tokens: num(fu.cache_read_input_tokens),
+        cache_creation_input_tokens: num(fu.cache_creation_input_tokens),
+      };
+      const sum = {
+        input_tokens: 0,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 0,
+        output_tokens: 0,
+      };
+      for (const u of byId.values()) for (const k of Object.keys(sum)) sum[k] += num(u[k]);
+      usageFacts = { first, sum, model, first_ts: firstTs, last_ts: lastTs };
+    }
   } else {
     // Last usage only: read the file from its end.
     const last = findLast(transcript, (e) => entryUsage(e) !== null);
@@ -168,7 +206,7 @@ export function ctxCheck({
   if (!usage) throw new CheckError('no_usage', `no assistant usage in ${transcript}`);
 
   const ctx = usedTokens(usage);
-  return {
+  const res = {
     context_tokens: ctx,
     context_k: Math.round(ctx / 1000),
     turns,
@@ -178,7 +216,10 @@ export function ctxCheck({
     transcript,
     source: 'transcript',
   };
+  return usageFacts ? { ...res, ...usageFacts } : res;
 }
+
+const USAGE_KEYS = ['first', 'sum', 'model', 'first_ts', 'last_ts'];
 
 export function runCli(argv = process.argv.slice(2), env = process.env) {
   try {
@@ -190,12 +231,14 @@ export function runCli(argv = process.argv.slice(2), env = process.env) {
       tag: a.tag,
       configDir: resolveConfigDir(env),
       withTurns: !a.noTurns,
+      withUsage: a.usage,
     });
     let outObj = res;
     if (a.brief) {
       outObj = { context_k: res.context_k };
-      if (res.turns != null) outObj.turns = res.turns;
+      if (!a.noTurns && res.turns != null) outObj.turns = res.turns;
       if (res.matched_by === 'substring') outObj.matched_by = 'substring';
+      for (const k of USAGE_KEYS) if (k in res) outObj[k] = res[k];
     } else if (a.noTurns) {
       const { turns: _omit, ...rest } = res;
       outObj = rest;

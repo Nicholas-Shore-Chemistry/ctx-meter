@@ -90,7 +90,7 @@ your own subagent context, which this report does not measure.
 returns the parent's context. To read one agent's own context from its transcript, run (with `$RT` resolved as in "How to run it"):
 
 ```bash
-"$RT" "${CLAUDE_PLUGIN_ROOT}/scripts/ctx-check.mjs" [--session-id <id>] [--agent-id <id> | --tag <text>] [--brief | --no-turns]
+"$RT" "${CLAUDE_PLUGIN_ROOT}/scripts/ctx-check.mjs" [--session-id <id>] [--agent-id <id> | --tag <text>] [--brief | --no-turns] [--usage]
 ```
 
 - `--session-id` defaults to `CLAUDE_CODE_SESSION_ID`. With neither `--agent-id` nor
@@ -104,7 +104,12 @@ returns the parent's context. To read one agent's own context from its transcrip
 
 `--brief` prints only `{"context_k", "turns"}` plus `matched_by` when it is `"substring"`.
 `--no-turns` keeps the full output but omits `turns`, which saves a full pass over the
-transcript. Otherwise output is one JSON line: `context_tokens` (the last assistant message's
+transcript. `--usage` adds `first` (the first assistant message's `input_tokens`,
+`cache_read_input_tokens`, `cache_creation_input_tokens`), `sum` (those three plus
+`output_tokens`, summed over distinct assistant messages, de-duplicated by message id like
+`turns`, each message counted with its last line's usage), `model` (of the last assistant
+message, skipping `<synthetic>`), `first_ts` and `last_ts` (first and last assistant line);
+it always reads the whole transcript and adds to `--brief` output too. Otherwise output is one JSON line: `context_tokens` (the last assistant message's
 `input_tokens + cache_read_input_tokens + cache_creation_input_tokens`), `context_k`
 (that in thousands, rounded), `turns` (distinct assistant API messages), `agent_id`
 (`null` for the main transcript), `spawn_depth` (from the agent's meta file, else

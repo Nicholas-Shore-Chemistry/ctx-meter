@@ -286,3 +286,125 @@ test('--tag resolves NESTOR-TAG owners; ORCH-TAG and GRUNT-TAG still work', () =
   assert.equal(runTag(agents, 'run1-orch').out.agent_id, 'or01');
   assert.equal(runTag(agents, 'run1-g').out.agent_id, 'gr01');
 });
+
+// --usage: start-up context of the first message, totals over distinct messages, model, times.
+// Expected values hand-summed from the golden fixtures (one usage per distinct message id).
+test('--usage adds first, sum, model and timestamps (main transcript)', () => {
+  const { status, out } = run(['--session-id', 'sess-0001', '--usage']);
+  assert.equal(status, 0);
+  assert.equal(out.context_tokens, 89511);
+  assert.equal(out.turns, 5);
+  assert.deepEqual(out.first, {
+    input_tokens: 2,
+    cache_read_input_tokens: 33560,
+    cache_creation_input_tokens: 19619,
+  });
+  assert.deepEqual(out.sum, {
+    input_tokens: 12,
+    cache_read_input_tokens: 284032,
+    cache_creation_input_tokens: 55949,
+    output_tokens: 2836,
+  });
+  assert.equal(out.model, 'claude-opus-5-5');
+  assert.equal(out.first_ts, '2026-10-29T16:51:46.408Z');
+  assert.equal(out.last_ts, '2026-10-29T16:52:11.988Z');
+});
+
+test('--usage on a sub-agent dedupes repeated lines of one message', () => {
+  const { out } = run(['--session-id', 'sess-0001', '--agent-id', 'aaaa1111', '--usage']);
+  assert.deepEqual(out.first, {
+    input_tokens: 2,
+    cache_read_input_tokens: 0,
+    cache_creation_input_tokens: 38713,
+  });
+  assert.deepEqual(out.sum, {
+    input_tokens: 20,
+    cache_read_input_tokens: 215343,
+    cache_creation_input_tokens: 45542,
+    output_tokens: 2027,
+  });
+  assert.equal(out.model, 'claude-haiku-5-5');
+  assert.equal(out.first_ts, '2026-10-29T16:52:52.210Z');
+  assert.equal(out.last_ts, '2026-10-29T16:53:07.373Z');
+});
+
+test('without --usage the output has none of the usage keys', () => {
+  const { out } = run(['--session-id', 'sess-0001', '--agent-id', 'aaaa1111']);
+  for (const k of ['first', 'sum', 'model', 'first_ts', 'last_ts']) assert.ok(!(k in out), k);
+});
+
+test('--usage combines with --brief and with --no-turns', () => {
+  const b = run(['--session-id', 'sess-0001', '--usage', '--brief']).out;
+  assert.deepEqual(Object.keys(b).sort(), [
+    'context_k',
+    'first',
+    'first_ts',
+    'last_ts',
+    'model',
+    'sum',
+    'turns',
+  ]);
+  assert.equal(b.sum.output_tokens, 2836);
+  const n = run(['--session-id', 'sess-0001', '--usage', '--no-turns']).out;
+  assert.ok(!('turns' in n));
+  assert.equal(n.sum.output_tokens, 2836);
+  const bn = run(['--session-id', 'sess-0001', '--usage', '--brief', '--no-turns']).out;
+  assert.ok(!('turns' in bn));
+  assert.equal(bn.first.cache_read_input_tokens, 33560);
+});
+
+test('--usage takes the last line of a message id, counts id-less lines singly, skips <synthetic> model', () => {
+  const cfg = fs.mkdtempSync(path.join(os.tmpdir(), 'ctx-check-usage-'));
+  try {
+    fs.mkdirSync(path.join(cfg, 'projects/p'), { recursive: true });
+    const a = (id, model, ts, u) => ({
+      type: 'assistant',
+      timestamp: ts,
+      message: { ...(id ? { id } : {}), model, usage: u },
+    });
+    const lines = [
+      a('m1', 'claude-x', 't1', {
+        input_tokens: 5,
+        cache_read_input_tokens: 100,
+        output_tokens: 1,
+      }),
+      a('m1', 'claude-x', 't2', {
+        input_tokens: 5,
+        cache_read_input_tokens: 100,
+        output_tokens: 9,
+      }),
+      a(null, 'claude-y', 't3', { input_tokens: 1, output_tokens: 2 }),
+      a(null, 'claude-y', 't4', { input_tokens: 1, output_tokens: 2 }),
+      a('m2', '<synthetic>', 't5', { input_tokens: 0, output_tokens: 0 }),
+    ];
+    fs.writeFileSync(
+      path.join(cfg, 'projects/p/sess-u.jsonl'),
+      lines.map((l) => JSON.stringify(l)).join('\n') + '\n',
+    );
+    const { status, out } = run(['--session-id', 'sess-u', '--usage'], { CLAUDE_CONFIG_DIR: cfg });
+    assert.equal(status, 0);
+    assert.equal(out.turns, 4);
+    assert.deepEqual(out.first, {
+      input_tokens: 5,
+      cache_read_input_tokens: 100,
+      cache_creation_input_tokens: 0,
+    });
+    assert.deepEqual(out.sum, {
+      input_tokens: 7,
+      cache_read_input_tokens: 100,
+      cache_creation_input_tokens: 0,
+      output_tokens: 13,
+    });
+    assert.equal(out.model, 'claude-y');
+    assert.equal(out.first_ts, 't1');
+    assert.equal(out.last_ts, 't5');
+  } finally {
+    fs.rmSync(cfg, { recursive: true, force: true });
+  }
+});
+
+test('--usage on a transcript without usage is still no_usage', () => {
+  const { status, out } = run(['--session-id', 'sess-0001', '--agent-id', 'cccc3333', '--usage']);
+  assert.equal(status, 2);
+  assert.equal(out.error, 'no_usage');
+});

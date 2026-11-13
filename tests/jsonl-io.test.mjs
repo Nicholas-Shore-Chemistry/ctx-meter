@@ -19,7 +19,8 @@ const write = (name, lines) => {
   return f;
 };
 const isUser = (e) => e?.type === 'user';
-const hasUsage = (e) => e?.type === 'assistant' && e?.message?.usage && typeof e.message.usage === 'object';
+const hasUsage = (e) =>
+  e?.type === 'assistant' && e?.message?.usage && typeof e.message.usage === 'object';
 const asst = (n) => ({ type: 'assistant', message: { id: `m${n}`, usage: { input_tokens: n } } });
 
 // Reference: the old full-parse behaviour.
@@ -63,7 +64,13 @@ test('findLast: single-line file, no trailing newline, none matching, missing fi
 
 test('findFirst: first user entry after malformed lines and a very long first line', () => {
   const long = JSON.stringify({ type: 'user', message: { content: 'L'.repeat(300_000) } });
-  const f = write('long.jsonl', ['{broken', '', JSON.stringify(asst(1)), long, JSON.stringify({ type: 'user', message: { content: 'second' } })]);
+  const f = write('long.jsonl', [
+    '{broken',
+    '',
+    JSON.stringify(asst(1)),
+    long,
+    JSON.stringify({ type: 'user', message: { content: 'second' } }),
+  ]);
   for (const chunk of [16, 4096, 64 * 1024]) {
     const e = findFirst(f, isUser, { chunk });
     assert.equal(e.message.content.length, 300_000, `chunk ${chunk}`);
@@ -85,7 +92,11 @@ test('head/tail results equal a full parse on every ctx-check fixture', () => {
       const p = path.join(d, e.name);
       return e.isDirectory() ? walk(p) : p.endsWith('.jsonl') ? [p] : [];
     });
-  const files = [...walk(fixtures), path.join(root, 'tests/fixtures/real-transcript.jsonl'), path.join(root, 'tests/fixtures/session.jsonl')];
+  const files = [
+    ...walk(fixtures),
+    path.join(root, 'tests/fixtures/real-transcript.jsonl'),
+    path.join(root, 'tests/fixtures/session.jsonl'),
+  ];
   for (const f of files) {
     const all = fullParse(f);
     for (const chunk of [32, 64 * 1024]) {
@@ -107,7 +118,10 @@ test('--brief prints context_k and turns only; matched_by only for substring', (
   const a = run(['--session-id', 'sess-0001', '--brief']);
   assert.deepEqual(a.out, { context_k: 90, turns: 5 });
   const b = run(['--session-id', 'sess-0001', '--tag', 'orch-alpha-1', '--brief']);
-  assert.deepEqual(Object.keys(b.out).sort(), ['context_k', 'matched_by', 'turns'].filter((k) => k in b.out));
+  assert.deepEqual(
+    Object.keys(b.out).sort(),
+    ['context_k', 'matched_by', 'turns'].filter((k) => k in b.out),
+  );
   assert.equal(b.out.context_k, 46);
   assert.ok(Buffer.byteLength(b.raw) < 60);
 });
@@ -125,6 +139,13 @@ test('--no-turns keeps the full shape without turns, same numbers', () => {
 test('default output is unchanged (key set)', () => {
   const { out } = run(['--session-id', 'sess-0001']);
   assert.deepEqual(Object.keys(out).sort(), [
-    'agent_id', 'context_k', 'context_tokens', 'matched_by', 'source', 'spawn_depth', 'transcript', 'turns',
+    'agent_id',
+    'context_k',
+    'context_tokens',
+    'matched_by',
+    'source',
+    'spawn_depth',
+    'transcript',
+    'turns',
   ]);
 });

@@ -45,6 +45,9 @@ Agents call the brief forms; they cost a fraction of the context tokens.
 - `ctx-check.mjs --brief` prints `{"context_k":87,"turns":41}` (plus `matched_by` only when it
   is `"substring"`). `--no-turns` keeps the full output without `turns`, which skips the full
   pass over the transcript. Without either flag the output is unchanged.
+- `ctx-check.mjs --usage` adds the first message's start-up tokens (`first`), token totals over
+  all distinct messages (`sum`), the last `model`, and `first_ts`/`last_ts`, for tools that
+  measure what an agent of a given type costs.
 
 `SKILL.md` is short on purpose. The full field list is in
 `plugins/ctx-meter/skills/ctx-meter/reference.md`.
